@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SL Bot Dashboard</title>
+    <link rel="stylesheet" href="/static/css/dashboard.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Second Life Bot Dashboard</h1>
+            <div class="header-controls">
+                <button id="refreshBtn" class="btn btn-secondary">Refresh</button>
+                <div class="auto-refresh">
+                    <input type="checkbox" id="autoRefresh" checked>
+                    <label for="autoRefresh">Auto-refresh (5s)</label>
+                </div>
+            </div>
+        </header>
+        
+        <div class="card">
+            <h2>Bot Status</h2>
+            <div class="status-grid">
+                <div class="status-item">
+                    <div class="status-label">Status</div>
+                    <div class="status-value {{if .Status.IsOnline}}online{{else}}offline{{end}}">
+                        {{if .Status.IsOnline}}Online{{else}}Offline{{end}}
+                    </div>
+                </div>
+                <div class="status-item">
+                    <div class="status-label">Location</div>
+                    <div class="status-value">{{.Status.CurrentSim}}</div>
+                </div>
+                <div class="status-item">
+                    <div class="status-label">Position</div>
+                    <div class="status-value">{{printf "%.0f, %.0f, %.0f" .Status.Position.X .Status.Position.Y .Status.Position.Z}}</div>
+                </div>
+                <div class="status-item">
+                    <div class="status-label">Following</div>
+                    <div class="status-value">{{if .Status.IsFollowing}}{{.Status.FollowTarget}}{{else}}No{{end}}</div>
+                </div>
+                <div class="status-item">
+                    <div class="status-label">Sitting</div>
+                    <div class="status-value">{{if .Status.IsSitting}}{{.Status.SitObject}}{{else}}No{{end}}</div>
+                </div>
+                <div class="status-item">
+                    <div class="status-label">AI Chat</div>
+                    <div class="status-value {{if .LlamaEnabled}}online{{else}}offline{{end}}">
+                        {{if .LlamaEnabled}}Enabled{{else}}Disabled{{end}}
+                    </div>
+                </div>
+                <div class="status-item">
+                    <div class="status-label">Bot Status</div>
+                    <div class="status-value {{if .IsIdle}}idle{{else}}active{{end}}">
+                        {{if .IsIdle}}Idle{{else}}Active{{end}}
+                    </div>
+                </div>
+                <div class="status-item">
+                    <div class="status-label">Last Update</div>
+                    <div class="status-value">{{.Status.LastUpdate.Format "15:04:05"}}</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>Macro System</h2>
+            
+            {{if .IsRecording}}
+            <div class="recording-status">
+                <h3 class="recording-indicator">🔴 Recording: {{.RecordingStatus.Name}}</h3>
+                <p>Started by {{.RecordingStatus.RecordedBy}} at {{.RecordingStatus.StartTime.Format "15:04:05"}}</p>
+                <p>Actions recorded: {{len .RecordingStatus.Actions}}</p>
+            </div>
+            {{end}}
+            
+            {{if gt (len .Macros) 0}}
+            <div class="idle-config-info">
+                <p><strong>Idle Behavior Settings:</strong> 
+                   Active after {{.Status.IdleBehaviorMinInterval}} minutes idle, 
+                   random intervals of {{.Status.IdleBehaviorMinInterval}}-{{.Status.IdleBehaviorMaxInterval}} minutes between behaviors</p>
+            </div>
+            {{end}}
+            
+            <div class="macro-controls">
+                {{if .Macros}}
+                <div class="macro-list">
+                    <h3>Available Macros</h3>
+                    <div class="macro-grid">
+                        {{range $name, $macro := .Macros}}
+                        <div class="macro-item">
+                            <h4>{{$name}} {{if $macro.IdleBehavior}}<span class="idle-badge">IDLE</span>{{end}}</h4>
+                            <p class="macro-description">{{if $macro.Description}}{{$macro.Description}}{{else}}No description{{end}}</p>
+                            <p class="macro-info">{{len $macro.Actions}} actions • {{$macro.Duration.Round 1000000000}} • by {{$macro.CreatedBy}}</p>
+                            {{if $macro.Tags}}<p class="macro-tags">Tags: {{range $i, $tag := $macro.Tags}}{{if $i}}, {{end}}{{$tag}}{{end}}</p>{{end}}
+                            <div class="macro-actions">
+                                <button class="btn btn-primary btn-sm" onclick="playMacro('{{$name}}')">Play</button>
+                                {{if $macro.IdleBehavior}}
+                                <button class="btn btn-secondary btn-sm" onclick="unsetIdleBehavior('{{$name}}')">Remove Idle</button>
+                                {{else}}
+                                <button class="btn btn-info btn-sm" onclick="setIdleBehavior('{{$name}}')">Set Idle</button>
+                                {{end}}
+                                <button class="btn btn-warning btn-sm" onclick="deleteMacro('{{$name}}')">Delete</button>
+                            </div>
+                        </div>
+                        {{end}}
+                    </div>
+                </div>
+                {{else}}
+                <div class="idle-info">
+                    <p>No macros available. Owners can create macros by saying "record macro [name]" in chat.</p>
+                    <div class="help-text">
+                        <h4>Idle Behavior Commands:</h4>
+                        <ul>
+                            <li><code>stop recording idle</code> - Mark recorded macro as idle behavior</li>
+                            <li><code>set idle [macro name]</code> - Mark existing macro as idle behavior</li>
+                            <li><code>unset idle [macro name]</code> - Remove idle behavior marking</li>
+                            <li><code>list idle</code> - Show all idle behavior macros</li>
+                        </ul>
+                        <p>Bot will automatically perform idle behaviors when inactive for 5+ minutes, with configurable random intervals between behaviors.</p>
+                    </div>
+                </div>
+                {{end}}
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>Movement Controls</h2>
+            <div class="controls-grid">
+                <div class="control-section">
+                    <h3>Teleport</h3>
+                    <form id="teleportForm" class="control-form">
+                        <div class="form-group">
+                            <label for="tpRegion">Region:</label>
+                            <input type="text" id="tpRegion" name="region" placeholder="Region name" required>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="tpX">X:</label>
+                                <input type="number" id="tpX" name="x" placeholder="128" value="128" required>
+                            </div>
+                            <div class="form-group">
+                                <label for="tpY">Y:</label>
+                                <input type="number" id="tpY" name="y" placeholder="128" value="128" required>
+                            </div>
+                            <div class="form-group">
+                                <label for="tpZ">Z:</label>
+                                <input type="number" id="tpZ" name="z" placeholder="22" value="22" required>
+                            </div>
+                        </div>
+                        <button type="submit" class="btn btn-primary">Teleport</button>
+                    </form>
+                </div>
+                
+                <div class="control-section">
+                    <h3>Walk To</h3>
+                    <form id="walkForm" class="control-form">
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="walkX">X:</label>
+                                <input type="number" id="walkX" name="x" placeholder="X coordinate" required>
+                            </div>
+                            <div class="form-group">
+                                <label for="walkY">Y:</label>
+                                <input type="number" id="walkY" name="y" placeholder="Y coordinate" required>
+                            </div>
+                            <div class="form-group">
+                                <label for="walkZ">Z:</label>
+                                <input type="number" id="walkZ" name="z" placeholder="Z coordinate" required>
+                            </div>
+                        </div>
+                        <button type="submit" class="btn btn-primary">Walk To</button>
+                    </form>
+                </div>
+            </div>
+            
+            <div class="quick-actions">
+                <button id="stopFollowBtn" class="btn btn-warning">Stop Following</button>
+                <button id="standUpBtn" class="btn btn-warning">Stand Up</button>
+                <button id="toggleLlamaBtn" class="btn {{if .LlamaEnabled}}btn-warning{{else}}btn-primary{{end}}">
+                    {{if .LlamaEnabled}}Disable AI{{else}}Enable AI{{end}}
+                </button>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>Recent Activity</h2>
+            <div class="logs-container" id="logsContainer">
+                {{range .Logs}}
+                <div class="log-entry log-{{.Type}}">
+                    <div class="log-timestamp">{{.Timestamp.Format "15:04:05"}}</div>
+                    <div class="log-content">
+                        <strong>{{.Avatar}}:</strong> {{.Message}}
+                        {{if .Response}}<br><em class="bot-response">Bot: {{.Response}}</em>{{end}}
+                    </div>
+                </div>
+                {{end}}
+            </div>
+        </div>
+    </div>
+
+    <!-- Status Messages -->
+    <div id="statusMessages" class="status-messages"></div>
+
+    <script src="/static/js/dashboard.js"></script>
+</body>
+</html>

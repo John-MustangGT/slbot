@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<config>
+    <!-- Corrade connection settings -->
+    <corrade>
+        <url>http://localhost:8080</url>
+        <group>YourGroupName</group>
+        <password>YourCorradePassword</password>
+    </corrade>
+
+    <!-- Ollama/Llama settings -->
+    <llama>
+        <enabled>true</enabled>
+        <url>http://localhost:11434</url>
+        <model>llama2</model>
+    </llama>
+
+    <!-- Bot behavior settings -->
+    <bot>
+        <name>AIBot</name>
+        <maxMessageLen>200</maxMessageLen>
+        <pollInterval>2</pollInterval>
+        <responseTimeout>30</responseTimeout>
+    </bot>
+
+    <!-- AI Prompts and messages -->
+    <prompts>
+        <!-- System prompt that sets the bot's personality and role -->
+        <systemPrompt>You are an AI assistant living in Second Life virtual world. You are helpful, friendly, and knowledgeable about virtual worlds, technology, and general topics. You speak naturally and conversationally. Your name is {botname}. Always keep responses under {maxlen} characters due to chat limitations.</systemPrompt>
+
+        <!-- Default chat prompt template -->
+        <chatPrompt>A user named {avatar} in Second Life said: "{message}". Respond helpfully and naturally. Be conversational but concise.</chatPrompt>
+
+        <!-- Greeting prompt for hello/hi messages -->
+        <greetingPrompt>A user named {avatar} is greeting you with: "{message}". Respond with a warm, friendly greeting back. Be welcoming and ask how you can help them today.</greetingPrompt>
+
+        <!-- Help prompt for when users ask for help -->
+        <helpPrompt>A user named {avatar} is asking for help: "{message}". Available commands: chat, follow people (say "follow me"), sit on objects (say "sit on [object name]"), move to coordinates (say "go to X Y Z"). OWNERS can also record macros with "record macro [name]", stop with "stop recording", and play with "play macro [name]". Be specific about capabilities.</helpPrompt>
+
+        <!-- Welcome message when bot comes online -->
+        <welcomeMessage>AI assistant is now online and ready to chat! Say my name to get my attention.</welcomeMessage>
+
+        <!-- Error message when AI fails to respond -->
+        <errorMessage>Sorry, I'm having trouble thinking right now. Please try again in a moment.</errorMessage>
+
+        <!-- Default fallback responses when Llama is disabled -->
+        <fallbackResponses>
+            <greeting>Hello! I'm a bot assistant. I can follow you, sit on objects, and move around. Say 'help' for commands. Owners can also record and replay macros, including idle behaviors!</greeting>
+            <help>Available commands: 'follow me', 'stop following', 'sit on [object]', 'stand up', 'go to X Y Z'. Owners can record macros: 'record macro [name]', 'stop recording [idle]', 'play macro [name]', 'list macros', 'set idle [name]', 'list idle'.</help>
+            <general>I'm here to help! Try asking me to follow you or sit somewhere. Owners can teach me new routines with macros, including idle behaviors I'll do when bored.</general>
+            <unknown>I don't understand that command. Say 'help' to see what I can do, or if you're an owner, try 'list macros' or 'list idle'.</unknown>
+        </fallbackResponses>
+    </prompts>
+</config>
