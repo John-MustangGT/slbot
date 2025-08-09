@@ -78,37 +78,66 @@ func (p *Processor) TestConnection() error {
 
 // Start starts the chat processor
 func (p *Processor) Start(ctx context.Context) error {
-	ticker := time.NewTicker(time.Duration(p.config.Bot.PollInterval) * time.Second)
-	defer ticker.Stop()
+	// Set up notifications for chat events instead of polling
+	if err := p.setupNotifications(); err != nil {
+		log.Printf("Failed to setup notifications: %v", err)
+		return err
+	}
 
-	// Start follow routine if needed
+	// Start follow routine
 	go p.followRoutine(ctx)
 
 	// Start idle behavior routine
 	go p.idleBehaviorRoutine(ctx)
 
-	for {
-		select {
-		case <-ctx.Done():
-			return nil
-		case <-ticker.C:
-			p.checkForEvents()
-		}
-	}
+	// Keep the context alive
+	<-ctx.Done()
+	return nil
 }
 
-// checkForEvents checks for new events from Corrade
-func (p *Processor) checkForEvents() {
-	response, err := p.corradeClient.GetEvents()
+// setupNotifications sets up Corrade notifications for chat events
+func (p *Processor) setupNotifications() error {
+	// Set up notification for LocalChat
+	err := p.corradeClient.SetupNotification("LocalChat", fmt.Sprintf("http://localhost:%d/corrade/notifications", p.config.Bot.WebPort))
 	if err != nil {
-		log.Printf("Error getting events: %v", err)
+		log.Printf("Failed to setup LocalChat notification: %v", err)
+	}
+
+	// Set up notification for InstantMessage
+	err = p.corradeClient.SetupNotification("InstantMessage", fmt.Sprintf("http://localhost:%d/corrade/notifications", p.config.Bot.WebPort))
+	if err != nil {
+		log.Printf("Failed to setup InstantMessage notification: %v", err)
+	}
+
+	return nil
+}
+
+// HandleNotification processes incoming notifications from Corrade
+func (p *Processor) HandleNotification(notification map[string]interface{}) {
+	// Extract event type
+	eventType, ok := notification["Type"].(string)
+	if !ok {
 		return
 	}
 
-	if strings.Contains(response, "success") {
-		messages := p.corradeClient.ParseEvents(response)
-		for _, message := range messages {
-			go p.processChat(message)
+	// Process LocalChat and InstantMessage events
+	if eventType == "LocalChat" || eventType == "InstantMessage" {
+		// Extract message data
+		avatar, _ := notification["FirstName"].(string)
+		lastName, _ := notification["LastName"].(string)
+		if lastName != "" {
+			avatar += " " + lastName
+		}
+		message, _ := notification["Message"].(string)
+
+		if avatar != "" && message != "" {
+			chatMessage := types.ChatMessage{
+				Avatar:  avatar,
+				Message: message,
+				Type:    eventType,
+			}
+
+			go p.processChat(chatMessage)
 		}
 	}
 }
@@ -861,4 +890,9 @@ func (p *Processor) GetPendingSitRequest() *types.PendingSitConfirmation {
 	// This functionality has been simplified since FindNearbyObjects doesn't exist
 	// Always return nil for now
 	return nil
+}
+
+// Add this method to expose HandleNotification for the web interface
+func (p *Processor) ProcessNotification(notification map[string]interface{}) {
+	p.HandleNotification(notification)
 }

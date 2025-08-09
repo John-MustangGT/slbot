@@ -53,6 +53,9 @@ func (w *Interface) Start(ctx context.Context) error {
 	// Dashboard
 	router.HandleFunc("/", w.dashboardHandler).Methods("GET")
 	
+	// Corrade notification endpoint
+	router.HandleFunc("/corrade/notifications", w.corradeNotificationHandler).Methods("POST")
+	
 	// API endpoints
 	api := router.PathPrefix("/api").Subrouter()
 	api.HandleFunc("/status", w.statusHandler).Methods("GET")
@@ -99,6 +102,24 @@ func (w *Interface) Stop(ctx context.Context) error {
 	return nil
 }
 
+// corradeNotificationHandler handles notifications from Corrade
+func (w *Interface) corradeNotificationHandler(writer http.ResponseWriter, request *http.Request) {
+	var notification map[string]interface{}
+	
+	if err := json.NewDecoder(request.Body).Decode(&notification); err != nil {
+		log.Printf("Error decoding Corrade notification: %v", err)
+		http.Error(writer, "Bad Request", http.StatusBadRequest)
+		return
+	}
+
+	// Process the notification through the chat processor
+	w.chatProcessor.ProcessNotification(notification)
+
+	// Respond with success
+	writer.WriteHeader(http.StatusOK)
+	writer.Write([]byte("OK"))
+}
+
 // loadTemplates loads HTML templates
 func (w *Interface) loadTemplates() error {
 	templatePath := filepath.Join("web", "templates", "*.html")
@@ -138,7 +159,8 @@ func (w *Interface) dashboardHandler(writer http.ResponseWriter, request *http.R
 	macros := w.chatProcessor.GetMacroManager().GetMacros()
 	recordingStatus := w.chatProcessor.GetMacroManager().GetRecordingStatus()
 	isIdle := w.chatProcessor.IsIdle()
-	pendingSit := w.chatProcessor.GetPendingSitRequest()
+	// Note: pendingSit functionality simplified - always returns nil now
+	pendingSit := (*types.PendingSitConfirmation)(nil)
 
 	data := struct {
 		Status          types.BotStatus

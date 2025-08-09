@@ -3,6 +3,7 @@ package corrade
 import (
 	"fmt"
 	"io"
+	"log"
 	"math"
 	"net/http"
 	"net/url"
@@ -62,6 +63,26 @@ func (c *Client) sendCommand(command string, params map[string]string) (string, 
 	}
 
 	return string(body), nil
+}
+
+// SetupNotification sets up a notification for specific events
+func (c *Client) SetupNotification(eventType, callbackURL string) error {
+	params := map[string]string{
+		"action": "add",
+		"type":   eventType,
+		"URL":    callbackURL,
+	}
+	response, err := c.sendCommand("notify", params)
+	if err != nil {
+		return err
+	}
+
+	if !strings.Contains(response, "success") {
+		return fmt.Errorf("failed to setup notification for %s: %s", eventType, response)
+	}
+
+	log.Printf("Setup notification for %s to %s", eventType, callbackURL)
+	return nil
 }
 
 // Say makes the bot speak in Second Life
@@ -131,8 +152,16 @@ func (c *Client) StandUp() error {
 
 // GetAvatarPosition gets an avatar's current position
 func (c *Client) GetAvatarPosition(avatar string) (types.Position, error) {
+	// Note: This might need to use a different command like getmapavatarpositions
+	// or rely on notifications/tracker data depending on Corrade's actual API
 	params := map[string]string{
-		"avatar": avatar,
+		"firstname": strings.Split(avatar, " ")[0],
+	}
+	
+	// Add lastname if available
+	parts := strings.Split(avatar, " ")
+	if len(parts) > 1 {
+		params["lastname"] = parts[1]
 	}
 
 	response, err := c.sendCommand("getavatardata", params)
@@ -140,10 +169,10 @@ func (c *Client) GetAvatarPosition(avatar string) (types.Position, error) {
 		return types.Position{}, err
 	}
 
-	// Parse position from response (simplified - you may need more robust parsing)
+	// Parse position from response (this may need adjustment based on actual API response)
 	pos := types.Position{}
-	if strings.Contains(response, "Position") {
-		re := regexp.MustCompile(`Position.*?([0-9.]+).*?([0-9.]+).*?([0-9.]+)`)
+	if strings.Contains(response, "Position") || strings.Contains(response, "GlobalPosition") {
+		re := regexp.MustCompile(`(?:Position|GlobalPosition).*?(\d+(?:\.\d+)?).*?(\d+(?:\.\d+)?).*?(\d+(?:\.\d+)?)`)
 		matches := re.FindStringSubmatch(response)
 		if len(matches) >= 4 {
 			fmt.Sscanf(matches[1], "%f", &pos.X)
@@ -157,19 +186,44 @@ func (c *Client) GetAvatarPosition(avatar string) (types.Position, error) {
 
 // GetOwnPosition gets the bot's current position
 func (c *Client) GetOwnPosition() types.Position {
-	response, err := c.sendCommand("getposition", nil)
+	// Try to get position from getstatus command first
+	response, err := c.sendCommand("getstatus", nil)
 	if err != nil {
+		log.Printf("Error getting status: %v", err)
 		return types.Position{}
 	}
 
 	pos := types.Position{}
-	// Parse own position from response
-	re := regexp.MustCompile(`([0-9.]+).*?([0-9.]+).*?([0-9.]+)`)
-	matches := re.FindStringSubmatch(response)
-	if len(matches) >= 4 {
-		fmt.Sscanf(matches[1], "%f", &pos.X)
-		fmt.Sscanf(matches[2], "%f", &pos.Y)
-		fmt.Sscanf(matches[3], "%f", &pos.Z)
+	// Try to parse position from getstatus response
+	// The exact format depends on what getstatus returns
+	if strings.Contains(response, "Position") || strings.Contains(response, "GlobalPosition") {
+		// Look for coordinate patterns in the response
+		re := regexp.MustCompile(`(?:Position|GlobalPosition).*?(\d+(?:\.\d+)?).*?(\d+(?:\.\d+)?).*?(\d+(?:\.\d+)?)`)
+		matches := re.FindStringSubmatch(response)
+		if len(matches) >= 4 {
+			fmt.Sscanf(matches[1], "%f", &pos.X)
+			fmt.Sscanf(matches[2], "%f", &pos.Y)
+			fmt.Sscanf(matches[3], "%f", &pos.Z)
+			return pos
+		}
+	}
+
+	// If getstatus doesn't provide position, try getregiondata
+	regionResponse, err := c.sendCommand("getregiondata", nil)
+	if err != nil {
+		log.Printf("Error getting region data: %v", err)
+		return types.Position{}
+	}
+
+	// Try to parse position from region data
+	if strings.Contains(regionResponse, "Position") || strings.Contains(regionResponse, "GlobalPosition") {
+		re := regexp.MustCompile(`(?:Position|GlobalPosition).*?(\d+(?:\.\d+)?).*?(\d+(?:\.\d+)?).*?(\d+(?:\.\d+)?)`)
+		matches := re.FindStringSubmatch(regionResponse)
+		if len(matches) >= 4 {
+			fmt.Sscanf(matches[1], "%f", &pos.X)
+			fmt.Sscanf(matches[2], "%f", &pos.Y)
+			fmt.Sscanf(matches[3], "%f", &pos.Z)
+		}
 	}
 
 	return pos
@@ -193,41 +247,9 @@ func (c *Client) GetCurrentRegion() string {
 	return "Unknown"
 }
 
-// GetEvents gets events from Corrade
-func (c *Client) GetEvents() (string, error) {
-	return c.sendCommand("getevent", map[string]string{
-		"callback": "InstantMessage,LocalChat,RegionSayDistance",
-	})
-}
-
-// ParseEvents parses event responses from Corrade
-func (c *Client) ParseEvents(response string) []types.ChatMessage {
-	var messages []types.ChatMessage
-
-	lines := strings.Split(response, "\n")
-	for _, line := range lines {
-		if strings.Contains(line, "LocalChat") || strings.Contains(line, "InstantMessage") {
-			// Extract chat information using regex
-			re := regexp.MustCompile(`"([^"]+)","([^"]+)","([^"]+)"`)
-			matches := re.FindStringSubmatch(line)
-
-			if len(matches) >= 4 {
-				message := types.ChatMessage{
-					Avatar:  matches[1],
-					Message: matches[2],
-					UUID:    matches[3],
-					Type:    "chat",
-				}
-				messages = append(messages, message)
-			}
-		}
-	}
-
-	return messages
-}
-
 // UpdateStatus updates the bot's current status
 func (c *Client) UpdateStatus() types.BotStatus {
+	// Get position using the corrected method
 	pos := c.GetOwnPosition()
 	region := c.GetCurrentRegion()
 
