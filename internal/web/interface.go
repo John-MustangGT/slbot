@@ -66,6 +66,12 @@ func (w *Interface) Start(ctx context.Context) error {
 	api.HandleFunc("/stand", w.standHandler).Methods("POST")
 	api.HandleFunc("/toggle-llama", w.toggleLlamaHandler).Methods("POST")
 	
+	// Avatar tracking API endpoints
+	api.HandleFunc("/avatars", w.getAvatarsHandler).Methods("GET")
+	api.HandleFunc("/autogreet", w.getAutoGreetHandler).Methods("GET")
+	api.HandleFunc("/autogreet", w.setAutoGreetHandler).Methods("POST")
+	api.HandleFunc("/autogreet", w.disableAutoGreetHandler).Methods("DELETE")
+	
 	// Macro API endpoints
 	macroAPI := api.PathPrefix("/macros").Subrouter()
 	macroAPI.HandleFunc("", w.getMacrosHandler).Methods("GET")
@@ -74,6 +80,8 @@ func (w *Interface) Start(ctx context.Context) error {
 	macroAPI.HandleFunc("/recording", w.getRecordingStatusHandler).Methods("GET")
 	macroAPI.HandleFunc("/idle/{name}", w.setIdleBehaviorHandler).Methods("POST")
 	macroAPI.HandleFunc("/idle/{name}", w.unsetIdleBehaviorHandler).Methods("DELETE")
+	macroAPI.HandleFunc("/autogreet/{name}", w.setAutoGreetMacroHandler).Methods("POST")
+	macroAPI.HandleFunc("/autogreet/{name}", w.unsetAutoGreetMacroHandler).Methods("DELETE")
 
 	// Create server
 	w.server = &http.Server{
@@ -127,6 +135,12 @@ func (w *Interface) loadTemplates() error {
 		"add": func(a, b int) int {
 			return a + b
 		},
+		"formatDuration": func(d time.Duration) string {
+			if d < time.Minute {
+				return fmt.Sprintf("%.0fs", d.Seconds())
+			}
+			return fmt.Sprintf("%.0fm", d.Minutes())
+		},
 	}).ParseGlob(templatePath)
 	if err != nil {
 		return err
@@ -159,27 +173,34 @@ func (w *Interface) dashboardHandler(writer http.ResponseWriter, request *http.R
 	macros := w.chatProcessor.GetMacroManager().GetMacros()
 	recordingStatus := w.chatProcessor.GetMacroManager().GetRecordingStatus()
 	isIdle := w.chatProcessor.IsIdle()
-	// Note: pendingSit functionality simplified - always returns nil now
+	nearbyAvatars := w.chatProcessor.GetNearbyAvatars()
+	autoGreetEnabled, autoGreetMacro := w.chatProcessor.GetAutoGreetConfig()
 	pendingSit := (*types.PendingSitConfirmation)(nil)
 
 	data := struct {
-		Status          types.BotStatus
-		Logs            []types.LogEntry
-		LlamaEnabled    bool
-		Macros          map[string]*types.Macro
-		IsRecording     bool
-		RecordingStatus *types.MacroRecording
-		IsIdle          bool
-		PendingSit      *types.PendingSitConfirmation
+		Status           types.BotStatus
+		Logs             []types.LogEntry
+		LlamaEnabled     bool
+		Macros           map[string]*types.Macro
+		IsRecording      bool
+		RecordingStatus  *types.MacroRecording
+		IsIdle           bool
+		PendingSit       *types.PendingSitConfirmation
+		NearbyAvatars    map[string]*types.AvatarInfo
+		AutoGreetEnabled bool
+		AutoGreetMacro   string
 	}{
-		Status:          status,
-		Logs:            logs,
-		LlamaEnabled:    w.chatProcessor.IsLlamaEnabled(),
-		Macros:          macros,
-		IsRecording:     recordingStatus != nil,
-		RecordingStatus: recordingStatus,
-		IsIdle:          isIdle,
-		PendingSit:      pendingSit,
+		Status:           status,
+		Logs:             logs,
+		LlamaEnabled:     w.chatProcessor.IsLlamaEnabled(),
+		Macros:           macros,
+		IsRecording:      recordingStatus != nil,
+		RecordingStatus:  recordingStatus,
+		IsIdle:           isIdle,
+		PendingSit:       pendingSit,
+		NearbyAvatars:    nearbyAvatars,
+		AutoGreetEnabled: autoGreetEnabled,
+		AutoGreetMacro:   autoGreetMacro,
 	}
 
 	if err := w.templates.ExecuteTemplate(writer, "dashboard.html", data); err != nil {
@@ -211,6 +232,79 @@ func (w *Interface) logsHandler(writer http.ResponseWriter, request *http.Reques
 	
 	writer.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(writer).Encode(logs)
+}
+
+// getAvatarsHandler returns nearby avatars as JSON
+func (w *Interface) getAvatarsHandler(writer http.ResponseWriter, request *http.Request) {
+	avatars := w.chatProcessor.GetNearbyAvatars()
+	
+	writer.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(writer).Encode(avatars)
+}
+
+// getAutoGreetHandler returns current auto-greet configuration
+func (w *Interface) getAutoGreetHandler(writer http.ResponseWriter, request *http.Request) {
+	enabled, macroName := w.chatProcessor.GetAutoGreetConfig()
+	
+	response := map[string]interface{}{
+		"enabled":   enabled,
+		"macroName": macroName,
+	}
+	
+	writer.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(writer).Encode(response)
+}
+
+// setAutoGreetHandler sets auto-greet configuration
+func (w *Interface) setAutoGreetHandler(writer http.ResponseWriter, request *http.Request) {
+	var req types.AutoGreetRequest
+	if err := json.NewDecoder(request.Body).Decode(&req); err != nil {
+		http.Error(writer, "Invalid JSON", http.StatusBadRequest)
+		return
+	}
+
+	if req.Enabled && req.MacroName == "" {
+		http.Error(writer, "Macro name required when enabling auto-greet", http.StatusBadRequest)
+		return
+	}
+
+	// Check if macro exists when enabling
+	if req.Enabled {
+		if _, exists := w.chatProcessor.GetMacroManager().GetMacro(req.MacroName); !exists {
+			response := map[string]string{
+				"status":  "error",
+				"message": fmt.Sprintf("Macro '%s' not found", req.MacroName),
+			}
+			writer.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(writer).Encode(response)
+			return
+		}
+	}
+
+	w.chatProcessor.SetAutoGreetConfig(req.Enabled, req.MacroName)
+
+	response := map[string]interface{}{
+		"status":  "success",
+		"message": "Auto-greet configuration updated",
+		"enabled": req.Enabled,
+		"macroName": req.MacroName,
+	}
+
+	writer.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(writer).Encode(response)
+}
+
+// disableAutoGreetHandler disables auto-greet
+func (w *Interface) disableAutoGreetHandler(writer http.ResponseWriter, request *http.Request) {
+	w.chatProcessor.SetAutoGreetConfig(false, "")
+
+	response := map[string]string{
+		"status":  "success",
+		"message": "Auto-greet disabled",
+	}
+
+	writer.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(writer).Encode(response)
 }
 
 // teleportHandler handles teleport requests
@@ -258,7 +352,6 @@ func (w *Interface) playMacroHandler(writer http.ResponseWriter, request *http.R
 	}
 	
 	// For web interface, use first owner as requestor
-	// In a real implementation, you'd want proper authentication
 	requestor := "WebInterface"
 	if len(w.config.Bot.Owners) > 0 {
 		requestor = w.config.Bot.Owners[0]
@@ -453,6 +546,70 @@ func (w *Interface) unsetIdleBehaviorHandler(writer http.ResponseWriter, request
 	response := map[string]string{
 		"status": "success",
 		"message": fmt.Sprintf("Macro '%s' no longer an idle behavior", macroName),
+	}
+
+	if err != nil {
+		response["status"] = "error"
+		response["message"] = err.Error()
+	}
+
+	writer.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(writer).Encode(response)
+}
+
+// setAutoGreetMacroHandler marks a macro as auto-greet
+func (w *Interface) setAutoGreetMacroHandler(writer http.ResponseWriter, request *http.Request) {
+	vars := mux.Vars(request)
+	macroName := vars["name"]
+
+	if macroName == "" {
+		http.Error(writer, "Macro name required", http.StatusBadRequest)
+		return
+	}
+
+	// For web interface, use first owner as requestor
+	requestor := "WebInterface"
+	if len(w.config.Bot.Owners) > 0 {
+		requestor = w.config.Bot.Owners[0]
+	}
+
+	err := w.chatProcessor.GetMacroManager().SetAutoGreet(macroName, requestor, true)
+
+	response := map[string]string{
+		"status": "success",
+		"message": fmt.Sprintf("Macro '%s' marked as auto-greet macro", macroName),
+	}
+
+	if err != nil {
+		response["status"] = "error"
+		response["message"] = err.Error()
+	}
+
+	writer.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(writer).Encode(response)
+}
+
+// unsetAutoGreetMacroHandler removes auto-greet marking from a macro
+func (w *Interface) unsetAutoGreetMacroHandler(writer http.ResponseWriter, request *http.Request) {
+	vars := mux.Vars(request)
+	macroName := vars["name"]
+
+	if macroName == "" {
+		http.Error(writer, "Macro name required", http.StatusBadRequest)
+		return
+	}
+
+	// For web interface, use first owner as requestor
+	requestor := "WebInterface"
+	if len(w.config.Bot.Owners) > 0 {
+		requestor = w.config.Bot.Owners[0]
+	}
+
+	err := w.chatProcessor.GetMacroManager().SetAutoGreet(macroName, requestor, false)
+
+	response := map[string]string{
+		"status": "success",
+		"message": fmt.Sprintf("Macro '%s' no longer an auto-greet macro", macroName),
 	}
 
 	if err != nil {

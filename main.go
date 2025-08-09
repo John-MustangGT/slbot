@@ -65,7 +65,7 @@ func main() {
 	}()
 
 	// Announce bot is online
-	if err := corradeClient.Say(cfg.Prompts.WelcomeMessage); err != nil {
+	if err := corradeClient.Tell(cfg.Prompts.WelcomeMessage); err != nil {
 		log.Printf("Failed to announce online status: %v", err)
 	}
 

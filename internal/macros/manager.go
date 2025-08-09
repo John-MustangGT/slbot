@@ -102,7 +102,7 @@ func (m *Manager) StartRecording(name, recordedBy string) error {
 }
 
 // StopRecording stops the current recording and saves the macro
-func (m *Manager) StopRecording(description string, tags []string, isIdleBehavior bool) error {
+func (m *Manager) StopRecording(description string, tags []string, isIdleBehavior, isAutoGreet bool) error {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
 
@@ -125,6 +125,7 @@ func (m *Manager) StopRecording(description string, tags []string, isIdleBehavio
 		Duration:     duration,
 		Tags:         tags,
 		IdleBehavior: isIdleBehavior,
+		AutoGreet:    isAutoGreet,
 	}
 
 	// Save macro to file
@@ -135,8 +136,8 @@ func (m *Manager) StopRecording(description string, tags []string, isIdleBehavio
 	// Add to memory
 	m.macros[macro.Name] = macro
 
-	log.Printf("Saved macro '%s' with %d actions (duration: %v, idle: %v)", 
-		macro.Name, len(macro.Actions), duration, isIdleBehavior)
+	log.Printf("Saved macro '%s' with %d actions (duration: %v, idle: %v, autogreet: %v)", 
+		macro.Name, len(macro.Actions), duration, isIdleBehavior, isAutoGreet)
 
 	// Clear recording
 	m.recording = nil
@@ -183,7 +184,7 @@ func (m *Manager) RecordAction(actionType string, data map[string]interface{}) {
 func (m *Manager) PlayMacro(name, requestedBy string) error {
 	m.mutex.Lock()
 	
-	if !m.IsOwner(requestedBy) {
+	if !m.IsOwner(requestedBy) && requestedBy != "AutoGreet" {
 		m.mutex.Unlock()
 		return fmt.Errorf("access denied: %s is not an owner", requestedBy)
 	}
@@ -273,11 +274,19 @@ func (m *Manager) executeAction(action types.MacroAction) error {
 	case "stand":
 		return m.corradeClient.StandUp()
 
-	case "say":
+	case "tell":
 		if message, ok := action.Data["message"].(string); ok {
-			return m.corradeClient.Say(message)
+			return m.corradeClient.Tell(message)
 		}
-		return fmt.Errorf("invalid say action data")
+		return fmt.Errorf("invalid tell action data")
+
+	case "whisper":
+		if avatar, ok := action.Data["avatar"].(string); ok {
+			if message, ok := action.Data["message"].(string); ok {
+				return m.corradeClient.Whisper(avatar, message)
+			}
+		}
+		return fmt.Errorf("invalid whisper action data")
 
 	case "wait":
 		if duration, ok := action.Data["duration"].(float64); ok {
@@ -318,6 +327,20 @@ func (m *Manager) GetIdleBehaviorMacros() []*types.Macro {
 	return idleMacros
 }
 
+// GetAutoGreetMacros returns all macros tagged as auto-greet macros
+func (m *Manager) GetAutoGreetMacros() []*types.Macro {
+	m.mutex.RLock()
+	defer m.mutex.RUnlock()
+
+	var autoGreetMacros []*types.Macro
+	for _, macro := range m.macros {
+		if macro.AutoGreet {
+			autoGreetMacros = append(autoGreetMacros, macro)
+		}
+	}
+	return autoGreetMacros
+}
+
 // SetIdleBehavior marks a macro as idle behavior or removes the marking
 func (m *Manager) SetIdleBehavior(name, requestedBy string, isIdleBehavior bool) error {
 	m.mutex.Lock()
@@ -344,6 +367,36 @@ func (m *Manager) SetIdleBehavior(name, requestedBy string, isIdleBehavior bool)
 		status = "added to"
 	}
 	log.Printf("Macro '%s' %s idle behaviors by %s", name, status, requestedBy)
+
+	return nil
+}
+
+// SetAutoGreet marks a macro as auto-greet or removes the marking
+func (m *Manager) SetAutoGreet(name, requestedBy string, isAutoGreet bool) error {
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
+
+	if !m.IsOwner(requestedBy) {
+		return fmt.Errorf("access denied: %s is not an owner", requestedBy)
+	}
+
+	macro, exists := m.macros[name]
+	if !exists {
+		return fmt.Errorf("macro '%s' not found", name)
+	}
+
+	macro.AutoGreet = isAutoGreet
+
+	// Save updated macro
+	if err := m.saveMacro(macro); err != nil {
+		return fmt.Errorf("failed to update macro: %w", err)
+	}
+
+	status := "removed from"
+	if isAutoGreet {
+		status = "added to"
+	}
+	log.Printf("Macro '%s' %s auto-greet macros by %s", name, status, requestedBy)
 
 	return nil
 }
@@ -399,6 +452,70 @@ func (m *Manager) PlayRandomIdleBehavior() error {
 		}
 
 		log.Printf("Completed idle behavior macro '%s' in %v", selectedMacro.Name, time.Since(startTime))
+	}()
+
+	return nil
+}
+
+// PlayAutoGreetMacro plays the specified auto-greet macro for a new avatar
+func (m *Manager) PlayAutoGreetMacro(macroName, avatarName string) error {
+	m.mutex.Lock()
+	
+	if m.isPlaying {
+		m.mutex.Unlock()
+		return fmt.Errorf("already playing a macro")
+	}
+
+	if m.recording != nil && m.recording.IsRecording {
+		m.mutex.Unlock()
+		return fmt.Errorf("cannot play macro while recording")
+	}
+
+	macro, exists := m.macros[macroName]
+	if !exists {
+		m.mutex.Unlock()
+		return fmt.Errorf("auto-greet macro '%s' not found", macroName)
+	}
+
+	m.isPlaying = true
+	m.mutex.Unlock()
+
+	// Execute macro in goroutine
+	go func() {
+		defer func() {
+			m.mutex.Lock()
+			m.isPlaying = false
+			m.mutex.Unlock()
+		}()
+
+		log.Printf("Playing auto-greet macro '%s' for %s (%d actions)", macroName, avatarName, len(macro.Actions))
+		
+		startTime := time.Now()
+		for i, action := range macro.Actions {
+			// Calculate delay based on original timing
+			if i > 0 {
+				prevAction := macro.Actions[i-1]
+				delay := action.Timestamp.Sub(prevAction.Timestamp)
+				if delay > 0 && delay < 30*time.Second { // Cap max delay
+					time.Sleep(delay)
+				}
+			}
+
+			// For auto-greet macros, we can substitute {avatar} in messages
+			if action.Type == "tell" || action.Type == "whisper" {
+				if message, ok := action.Data["message"].(string); ok {
+					// Replace {avatar} placeholder with the actual avatar name
+					message = strings.ReplaceAll(message, "{avatar}", avatarName)
+					action.Data["message"] = message
+				}
+			}
+
+			if err := m.executeAction(action); err != nil {
+				log.Printf("Error executing action %d in auto-greet macro '%s': %v", i+1, macroName, err)
+			}
+		}
+
+		log.Printf("Completed auto-greet macro '%s' for %s in %v", macroName, avatarName, time.Since(startTime))
 	}()
 
 	return nil

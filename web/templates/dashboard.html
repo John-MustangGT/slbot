@@ -5,6 +5,186 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>SL Bot Dashboard</title>
     <link rel="stylesheet" href="/static/css/dashboard.css">
+    <style>
+        /* Avatar tracking specific styles */
+        .avatar-controls {
+            display: flex;
+            flex-direction: column;
+            gap: 30px;
+        }
+        
+        .auto-greet-section {
+            background: #f7fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            padding: 20px;
+        }
+        
+        .auto-greet-config {
+            margin-top: 15px;
+        }
+        
+        .current-config {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 15px;
+            background: #e6fffa;
+            border: 1px solid #81e6d9;
+            border-radius: 6px;
+        }
+        
+        .config-form {
+            display: flex;
+            gap: 15px;
+            align-items: center;
+        }
+        
+        .config-form select {
+            flex: 1;
+            padding: 10px 12px;
+            border: 2px solid #e2e8f0;
+            border-radius: 6px;
+            font-size: 1rem;
+        }
+        
+        .nearby-avatars-section {
+            background: #f7fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            padding: 20px;
+        }
+        
+        .avatars-list {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+            gap: 20px;
+            margin-top: 15px;
+        }
+        
+        .avatar-item {
+            background: white;
+            border: 2px solid #e2e8f0;
+            border-radius: 8px;
+            padding: 20px;
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+        
+        .avatar-item:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        }
+        
+        .avatar-item.new {
+            border-color: #f6ad55;
+            background: #fffaf0;
+        }
+        
+        .avatar-item.greeted {
+            border-color: #68d391;
+            background: #f0fff4;
+        }
+        
+        .avatar-info h4 {
+            margin: 0 0 10px 0;
+            color: #2d3748;
+            font-size: 1.2rem;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .avatar-position {
+            color: #4a5568;
+            font-size: 0.9rem;
+            margin: 5px 0;
+            font-family: monospace;
+        }
+        
+        .avatar-times {
+            color: #718096;
+            font-size: 0.85rem;
+            margin: 10px 0;
+        }
+        
+        .avatar-actions {
+            margin-top: 15px;
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+        
+        .new-badge {
+            background: #ed8936;
+            color: white;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 0.7rem;
+            font-weight: bold;
+        }
+        
+        .autogreet-badge {
+            background: #38a169;
+            color: white;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 0.7rem;
+            font-weight: bold;
+            margin-left: 8px;
+        }
+        
+        .no-avatars {
+            text-align: center;
+            padding: 40px;
+            color: #718096;
+            font-style: italic;
+        }
+        
+        .btn-success {
+            background-color: #38a169;
+            color: white;
+        }
+        
+        .btn-success:hover {
+            background-color: #2f855a;
+            transform: translateY(-1px);
+            box-shadow: 0 4px 8px rgba(56, 161, 105, 0.3);
+        }
+        
+        /* Enhanced status grid for auto-greet status */
+        .status-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+        }
+        
+        /* Responsive design for avatar tracking */
+        @media (max-width: 768px) {
+            .avatar-controls {
+                gap: 20px;
+            }
+            
+            .avatars-list {
+                grid-template-columns: 1fr;
+                gap: 15px;
+            }
+            
+            .config-form {
+                flex-direction: column;
+                align-items: stretch;
+            }
+            
+            .current-config {
+                flex-direction: column;
+                gap: 15px;
+                text-align: center;
+            }
+            
+            .avatar-actions {
+                justify-content: center;
+            }
+        }
+    </style>
 </head>
 <body>
     <div class="container">
@@ -57,9 +237,73 @@
                     </div>
                 </div>
                 <div class="status-item">
+                    <div class="status-label">Auto-Greet</div>
+                    <div class="status-value {{if .AutoGreetEnabled}}online{{else}}offline{{end}}">
+                        {{if .AutoGreetEnabled}}{{.AutoGreetMacro}}{{else}}Disabled{{end}}
+                    </div>
+                </div>
+                <div class="status-item">
                     <div class="status-label">Last Update</div>
                     <div class="status-value">{{.Status.LastUpdate.Format "15:04:05"}}</div>
                 </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>Avatar Tracking</h2>
+            
+            <div class="avatar-controls">
+                <div class="auto-greet-section">
+                    <h3>Auto-Greet Configuration</h3>
+                    <div class="auto-greet-config">
+                        {{if .AutoGreetEnabled}}
+                        <div class="current-config">
+                            <p><strong>Currently enabled with macro:</strong> {{.AutoGreetMacro}}</p>
+                            <button id="disableAutoGreetBtn" class="btn btn-warning">Disable Auto-Greet</button>
+                        </div>
+                        {{else}}
+                        <div class="config-form">
+                            <select id="autoGreetMacroSelect" class="form-control">
+                                <option value="">Select a macro for auto-greet...</option>
+                                {{range $name, $macro := .Macros}}
+                                <option value="{{$name}}">{{$name}} {{if $macro.AutoGreet}}(Auto-Greet){{end}}</option>
+                                {{end}}
+                            </select>
+                            <button id="enableAutoGreetBtn" class="btn btn-primary">Enable Auto-Greet</button>
+                        </div>
+                        {{end}}
+                    </div>
+                </div>
+
+                {{if gt (len .NearbyAvatars) 0}}
+                <div class="nearby-avatars-section">
+                    <h3>Nearby Avatars ({{len .NearbyAvatars}})</h3>
+                    <div class="avatars-list">
+                        {{range $name, $avatar := .NearbyAvatars}}
+                        <div class="avatar-item {{if $avatar.IsGreeted}}greeted{{else}}new{{end}}">
+                            <div class="avatar-info">
+                                <h4>{{$name}} {{if not $avatar.IsGreeted}}<span class="new-badge">NEW</span>{{end}}</h4>
+                                <p class="avatar-position">Position: {{printf "%.0f, %.0f, %.0f" $avatar.Position.X $avatar.Position.Y $avatar.Position.Z}}</p>
+                                <p class="avatar-times">
+                                    First seen: {{$avatar.FirstSeen.Format "15:04:05"}}<br>
+                                    Last seen: {{$avatar.LastSeen.Format "15:04:05"}} ({{formatDuration (since $avatar.LastSeen)}} ago)
+                                </p>
+                            </div>
+                            <div class="avatar-actions">
+                                {{if not $avatar.IsGreeted}}
+                                <button class="btn btn-sm btn-primary" onclick="greetAvatar('{{$name}}')">Greet Now</button>
+                                {{end}}
+                                <button class="btn btn-sm btn-secondary" onclick="teleportToAvatar('{{$name}}', {{$avatar.Position.X}}, {{$avatar.Position.Y}}, {{$avatar.Position.Z}})">Teleport To</button>
+                            </div>
+                        </div>
+                        {{end}}
+                    </div>
+                </div>
+                {{else}}
+                <div class="no-avatars">
+                    <p>No other avatars currently in the region.</p>
+                </div>
+                {{end}}
             </div>
         </div>
 
@@ -89,9 +333,12 @@
                     <div class="macro-grid">
                         {{range $name, $macro := .Macros}}
                         <div class="macro-item">
-                            <h4>{{$name}} {{if $macro.IdleBehavior}}<span class="idle-badge">IDLE</span>{{end}}</h4>
+                            <h4>{{$name}} 
+                                {{if $macro.IdleBehavior}}<span class="idle-badge">IDLE</span>{{end}}
+                                {{if $macro.AutoGreet}}<span class="autogreet-badge">AUTO-GREET</span>{{end}}
+                            </h4>
                             <p class="macro-description">{{if $macro.Description}}{{$macro.Description}}{{else}}No description{{end}}</p>
-                            <p class="macro-info">{{len $macro.Actions}} actions • {{$macro.Duration.Round 1000000000}} • by {{$macro.CreatedBy}}</p>
+                            <p class="macro-info">{{len $macro.Actions}} actions • {{formatDuration $macro.Duration}} • by {{$macro.CreatedBy}}</p>
                             {{if $macro.Tags}}<p class="macro-tags">Tags: {{range $i, $tag := $macro.Tags}}{{if $i}}, {{end}}{{$tag}}{{end}}</p>{{end}}
                             <div class="macro-actions">
                                 <button class="btn btn-primary btn-sm" onclick="playMacro('{{$name}}')">Play</button>
@@ -99,6 +346,11 @@
                                 <button class="btn btn-secondary btn-sm" onclick="unsetIdleBehavior('{{$name}}')">Remove Idle</button>
                                 {{else}}
                                 <button class="btn btn-info btn-sm" onclick="setIdleBehavior('{{$name}}')">Set Idle</button>
+                                {{end}}
+                                {{if $macro.AutoGreet}}
+                                <button class="btn btn-secondary btn-sm" onclick="unsetAutoGreetMacro('{{$name}}')">Remove Auto-Greet</button>
+                                {{else}}
+                                <button class="btn btn-success btn-sm" onclick="setAutoGreetMacro('{{$name}}')">Set Auto-Greet</button>
                                 {{end}}
                                 <button class="btn btn-warning btn-sm" onclick="deleteMacro('{{$name}}')">Delete</button>
                             </div>
@@ -110,14 +362,23 @@
                 <div class="idle-info">
                     <p>No macros available. Owners can create macros by saying "record macro [name]" in chat.</p>
                     <div class="help-text">
-                        <h4>Idle Behavior Commands:</h4>
+                        <h4>Avatar Tracking Commands:</h4>
                         <ul>
-                            <li><code>stop recording idle</code> - Mark recorded macro as idle behavior</li>
-                            <li><code>set idle [macro name]</code> - Mark existing macro as idle behavior</li>
-                            <li><code>unset idle [macro name]</code> - Remove idle behavior marking</li>
-                            <li><code>list idle</code> - Show all idle behavior macros</li>
+                            <li><code>list avatars</code> - Show nearby avatars</li>
+                            <li><code>set autogreet [macro name]</code> - Enable auto-greet with specific macro</li>
+                            <li><code>disable autogreet</code> - Disable auto-greet</li>
+                            <li><code>autogreet status</code> - Show current auto-greet status</li>
+                            <li><code>set autogreet macro [name]</code> - Mark macro as auto-greet type</li>
+                            <li><code>list autogreet</code> - List all auto-greet macros</li>
                         </ul>
-                        <p>Bot will automatically perform idle behaviors when inactive for 5+ minutes, with configurable random intervals between behaviors.</p>
+                        
+                        <h4>Macro Recording Commands:</h4>
+                        <ul>
+                            <li><code>stop recording autogreet</code> - Mark recorded macro as auto-greet</li>
+                            <li><code>stop recording idle autogreet</code> - Mark as both idle and auto-greet</li>
+                        </ul>
+                        
+                        <p>Use <code>{avatar}</code> in auto-greet macros to substitute the avatar's name in messages.</p>
                     </div>
                 </div>
                 {{end}}
@@ -203,5 +464,146 @@
     <div id="statusMessages" class="status-messages"></div>
 
     <script src="/static/js/dashboard.js"></script>
+    <script>
+        // Avatar tracking specific functions
+        function greetAvatar(avatarName) {
+            // Get current auto-greet macro
+            const autoGreetMacro = '{{.AutoGreetMacro}}';
+            if (!autoGreetMacro) {
+                dashboard.showMessage('No auto-greet macro configured', 'error');
+                return;
+            }
+            
+            // Play the auto-greet macro for this avatar
+            fetch(`/api/macros/play/${encodeURIComponent(autoGreetMacro)}`, {
+                method: 'POST'
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    dashboard.showMessage(`Greeting ${avatarName} with macro '${autoGreetMacro}'`, 'success');
+                } else {
+                    dashboard.showMessage(data.message || 'Failed to play greeting macro', 'error');
+                }
+            })
+            .catch(error => {
+                dashboard.showMessage('Failed to greet avatar', 'error');
+            });
+        }
+        
+        function teleportToAvatar(avatarName, x, y, z) {
+            const teleportData = {
+                region: '{{.Status.CurrentSim}}',
+                x: x,
+                y: y,
+                z: z + 2 // Teleport slightly above the avatar
+            };
+            
+            fetch('/api/teleport', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(teleportData)
+            })
+            .then(response => response.json())
+            .then(data => {
+                dashboard.showMessage(`Teleporting near ${avatarName}`, data.status === 'success' ? 'success' : 'error');
+            })
+            .catch(error => {
+                dashboard.showMessage('Failed to teleport to avatar', 'error');
+            });
+        }
+        
+        function setAutoGreetMacro(macroName) {
+            fetch(`/api/macros/autogreet/${encodeURIComponent(macroName)}`, {
+                method: 'POST'
+            })
+            .then(response => response.json())
+            .then(data => {
+                dashboard.showMessage(data.message, data.status === 'success' ? 'success' : 'error');
+                if (data.status === 'success') {
+                    setTimeout(() => window.location.reload(), 1000);
+                }
+            })
+            .catch(error => {
+                dashboard.showMessage('Failed to set auto-greet macro', 'error');
+            });
+        }
+        
+        function unsetAutoGreetMacro(macroName) {
+            fetch(`/api/macros/autogreet/${encodeURIComponent(macroName)}`, {
+                method: 'DELETE'
+            })
+            .then(response => response.json())
+            .then(data => {
+                dashboard.showMessage(data.message, data.status === 'success' ? 'success' : 'error');
+                if (data.status === 'success') {
+                    setTimeout(() => window.location.reload(), 1000);
+                }
+            })
+            .catch(error => {
+                dashboard.showMessage('Failed to unset auto-greet macro', 'error');
+            });
+        }
+        
+        // Auto-greet configuration functions
+        document.addEventListener('DOMContentLoaded', function() {
+            const enableAutoGreetBtn = document.getElementById('enableAutoGreetBtn');
+            const disableAutoGreetBtn = document.getElementById('disableAutoGreetBtn');
+            const autoGreetMacroSelect = document.getElementById('autoGreetMacroSelect');
+            
+            if (enableAutoGreetBtn) {
+                enableAutoGreetBtn.addEventListener('click', function() {
+                    const selectedMacro = autoGreetMacroSelect.value;
+                    if (!selectedMacro) {
+                        dashboard.showMessage('Please select a macro first', 'error');
+                        return;
+                    }
+                    
+                    const requestData = {
+                        enabled: true,
+                        macroName: selectedMacro
+                    };
+                    
+                    fetch('/api/autogreet', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify(requestData)
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        dashboard.showMessage(data.message, data.status === 'success' ? 'success' : 'error');
+                        if (data.status === 'success') {
+                            setTimeout(() => window.location.reload(), 1000);
+                        }
+                    })
+                    .catch(error => {
+                        dashboard.showMessage('Failed to enable auto-greet', 'error');
+                    });
+                });
+            }
+            
+            if (disableAutoGreetBtn) {
+                disableAutoGreetBtn.addEventListener('click', function() {
+                    fetch('/api/autogreet', {
+                        method: 'DELETE'
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        dashboard.showMessage(data.message, data.status === 'success' ? 'success' : 'error');
+                        if (data.status === 'success') {
+                            setTimeout(() => window.location.reload(), 1000);
+                        }
+                    })
+                    .catch(error => {
+                        dashboard.showMessage('Failed to disable auto-greet', 'error');
+                    });
+                });
+            }
+        });
+    </script>
 </body>
 </html>

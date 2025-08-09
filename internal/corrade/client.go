@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"regexp"
 	"strings"
+	"sync"
 	"time"
 
 	"slbot/internal/config"
@@ -17,10 +18,12 @@ import (
 
 // Client handles all Corrade communication
 type Client struct {
-	config     config.CorradeConfig
-	httpClient *http.Client
-	status     types.BotStatus
-	botName    string // Store the bot's own name for position queries
+	config        config.CorradeConfig
+	httpClient    *http.Client
+	status        types.BotStatus
+	botName       string // Store the bot's own name for position queries
+	botUUID       string // Store the bot's UUID
+	avatarsMutex  sync.RWMutex
 }
 
 // NewClient creates a new Corrade client
@@ -29,8 +32,9 @@ func NewClient(cfg config.CorradeConfig) *Client {
 		config:     cfg,
 		httpClient: &http.Client{Timeout: 30 * time.Second},
 		status: types.BotStatus{
-			IsOnline:   false,
-			LastUpdate: time.Now(),
+			IsOnline:      false,
+			LastUpdate:    time.Now(),
+			NearbyAvatars: make(map[string]*types.AvatarInfo),
 		},
 		botName: "", // Will be set when we have bot config
 	}
@@ -93,23 +97,24 @@ func (c *Client) SetupNotification(eventType, callbackURL string) error {
 	return nil
 }
 
-// Say makes the bot speak in Second Life
-func (c *Client) Say(message string) error {
+// Tell makes the bot speak using the tell command (replaces Say)
+func (c *Client) Tell(message string) error {
 	params := map[string]string{
 		"message": message,
-		"entity": "local",
-		"type": "Normal",
-        }
+		"entity":  "local",
+		"type":    "Normal",
+	}
 	_, err := c.sendCommand("tell", params)
 	return err
 }
 
-// Whisper makes the bot whisper to a specific avatar
+// Whisper makes the bot whisper to a specific avatar using tell command
 func (c *Client) Whisper(avatar, message string) error {
 	params := map[string]string{
-		"agent":  avatar,
+		"agent":   avatar,
 		"message": message,
-		"entity": "avatar",
+		"entity":  "avatar",
+		"type":    "Whisper",
 	}
 	_, err := c.sendCommand("tell", params)
 	return err
@@ -163,8 +168,6 @@ func (c *Client) StandUp() error {
 
 // GetAvatarPosition gets an avatar's current position
 func (c *Client) GetAvatarPosition(avatar string) (types.Position, error) {
-	// Note: This might need to use a different command like getmapavatarpositions
-	// or rely on notifications/tracker data depending on Corrade's actual API
 	params := map[string]string{
 		"firstname": strings.Split(avatar, " ")[0],
 	}
@@ -180,7 +183,7 @@ func (c *Client) GetAvatarPosition(avatar string) (types.Position, error) {
 		return types.Position{}, err
 	}
 
-	// Parse position from response (this may need adjustment based on actual API response)
+	// Parse position from response
 	pos := types.Position{}
 	if strings.Contains(response, "Position") || strings.Contains(response, "GlobalPosition") {
 		re := regexp.MustCompile(`(?:Position|GlobalPosition).*?(\d+(?:\.\d+)?).*?(\d+(?:\.\d+)?).*?(\d+(?:\.\d+)?)`)
@@ -234,6 +237,120 @@ func (c *Client) GetOwnPosition() types.Position {
 	return pos
 }
 
+// GetNearbyAvatars gets avatars in the current region
+func (c *Client) GetNearbyAvatars() (map[string]*types.AvatarInfo, error) {
+	response, err := c.sendCommand("getmapavatarpositions", nil)
+	if err != nil {
+		return nil, err
+	}
+
+	c.avatarsMutex.Lock()
+	defer c.avatarsMutex.Unlock()
+
+	currentTime := time.Now()
+	currentAvatars := make(map[string]string) // name -> uuid mapping for this scan
+	
+	// Parse avatar data from response
+	// This regex should be adjusted based on the actual response format from Corrade
+	avatarRegex := regexp.MustCompile(`FirstName.*?([^,\s]+).*?LastName.*?([^,\s]*).*?GlobalPosition.*?<(\d+(?:\.\d+)?),\s*(\d+(?:\.\d+)?),\s*(\d+(?:\.\d+)?)>.*?UUID.*?([a-fA-F0-9-]+)`)
+	matches := avatarRegex.FindAllStringSubmatch(response, -1)
+	
+	for _, match := range matches {
+		if len(match) >= 7 {
+			firstName := strings.Trim(match[1], `"`)
+			lastName := strings.Trim(match[2], `"`)
+			uuid := match[6]
+			
+			// Skip if this is the bot itself
+			if firstName == strings.Split(c.botName, " ")[0] {
+				continue
+			}
+			
+			var x, y, z float64
+			fmt.Sscanf(match[3], "%f", &x)
+			fmt.Sscanf(match[4], "%f", &y)
+			fmt.Sscanf(match[5], "%f", &z)
+			
+			name := firstName
+			if lastName != "" && lastName != "Resident" {
+				name += " " + lastName
+			}
+			
+			currentAvatars[name] = uuid
+			
+			pos := types.Position{X: x, Y: y, Z: z}
+			
+			if existingAvatar, exists := c.status.NearbyAvatars[name]; exists {
+				// Update existing avatar
+				existingAvatar.Position = pos
+				existingAvatar.LastSeen = currentTime
+				existingAvatar.UUID = uuid
+			} else {
+				// New avatar
+				c.status.NearbyAvatars[name] = &types.AvatarInfo{
+					Name:      name,
+					UUID:      uuid,
+					Position:  pos,
+					FirstSeen: currentTime,
+					LastSeen:  currentTime,
+					IsGreeted: false,
+				}
+				log.Printf("New avatar detected: %s", name)
+			}
+		}
+	}
+	
+	// Remove avatars that are no longer in the region (not seen for 2 minutes)
+	for name, avatar := range c.status.NearbyAvatars {
+		if _, stillPresent := currentAvatars[name]; !stillPresent {
+			if time.Since(avatar.LastSeen) > 2*time.Minute {
+				delete(c.status.NearbyAvatars, name)
+				log.Printf("Avatar left region: %s", name)
+			}
+		}
+	}
+	
+	// Return a copy of the current avatars
+	result := make(map[string]*types.AvatarInfo)
+	for name, avatar := range c.status.NearbyAvatars {
+		result[name] = &types.AvatarInfo{
+			Name:      avatar.Name,
+			UUID:      avatar.UUID,
+			Position:  avatar.Position,
+			FirstSeen: avatar.FirstSeen,
+			LastSeen:  avatar.LastSeen,
+			IsGreeted: avatar.IsGreeted,
+		}
+	}
+	
+	return result, nil
+}
+
+// GetNewAvatars returns avatars that haven't been greeted yet
+func (c *Client) GetNewAvatars() []*types.AvatarInfo {
+	c.avatarsMutex.RLock()
+	defer c.avatarsMutex.RUnlock()
+	
+	var newAvatars []*types.AvatarInfo
+	for _, avatar := range c.status.NearbyAvatars {
+		if !avatar.IsGreeted {
+			newAvatars = append(newAvatars, avatar)
+		}
+	}
+	
+	return newAvatars
+}
+
+// MarkAvatarGreeted marks an avatar as having been greeted
+func (c *Client) MarkAvatarGreeted(name string) {
+	c.avatarsMutex.Lock()
+	defer c.avatarsMutex.Unlock()
+	
+	if avatar, exists := c.status.NearbyAvatars[name]; exists {
+		avatar.IsGreeted = true
+	}
+}
+
 // GetCurrentRegion gets the current region/sim name
 func (c *Client) GetCurrentRegion() string {
 	response, err := c.sendCommand("getregiondata", nil)
@@ -284,13 +401,41 @@ func (c *Client) UpdateStatusWithConfig(config interface{}) types.BotStatus {
 
 // GetStatus returns the current bot status
 func (c *Client) GetStatus() types.BotStatus {
-	return c.status
+	// Make a copy to prevent external modification of NearbyAvatars
+	statusCopy := c.status
+	statusCopy.NearbyAvatars = make(map[string]*types.AvatarInfo)
+	
+	c.avatarsMutex.RLock()
+	for name, avatar := range c.status.NearbyAvatars {
+		statusCopy.NearbyAvatars[name] = &types.AvatarInfo{
+			Name:      avatar.Name,
+			UUID:      avatar.UUID,
+			Position:  avatar.Position,
+			FirstSeen: avatar.FirstSeen,
+			LastSeen:  avatar.LastSeen,
+			IsGreeted: avatar.IsGreeted,
+		}
+	}
+	c.avatarsMutex.RUnlock()
+	
+	return statusCopy
 }
 
 // SetFollowing sets the following status
 func (c *Client) SetFollowing(following bool, target string) {
 	c.status.IsFollowing = following
 	c.status.FollowTarget = target
+}
+
+// SetAutoGreet sets the auto-greet configuration
+func (c *Client) SetAutoGreet(enabled bool, macroName string) {
+	c.status.AutoGreetEnabled = enabled
+	c.status.AutoGreetMacro = macroName
+}
+
+// GetAutoGreetConfig returns the current auto-greet configuration
+func (c *Client) GetAutoGreetConfig() (bool, string) {
+	return c.status.AutoGreetEnabled, c.status.AutoGreetMacro
 }
 
 // CalculateDistance calculates 3D distance between two positions

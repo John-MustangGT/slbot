@@ -26,24 +26,37 @@ type FollowTarget struct {
 	Position Position  `json:"position"`
 }
 
+// AvatarInfo represents an avatar in the region
+type AvatarInfo struct {
+	Name     string    `json:"name"`
+	UUID     string    `json:"uuid"`
+	Position Position  `json:"position"`
+	LastSeen time.Time `json:"lastSeen"`
+	FirstSeen time.Time `json:"firstSeen"`
+	IsGreeted bool      `json:"isGreeted"`
+}
+
 // BotStatus represents current bot status
 type BotStatus struct {
-	IsOnline                bool      `json:"isOnline"`
-	CurrentSim              string    `json:"currentSim"`
-	Position                Position  `json:"position"`
-	IsFollowing             bool      `json:"isFollowing"`
-	FollowTarget            string    `json:"followTarget"`
-	IsSitting               bool      `json:"isSitting"`
-	SitObject               string    `json:"sitObject"`
-	LastUpdate              time.Time `json:"lastUpdate"`
-	IdleBehaviorMinInterval int       `json:"idleBehaviorMinInterval"`
-	IdleBehaviorMaxInterval int       `json:"idleBehaviorMaxInterval"`
+	IsOnline                bool                   `json:"isOnline"`
+	CurrentSim              string                 `json:"currentSim"`
+	Position                Position               `json:"position"`
+	IsFollowing             bool                   `json:"isFollowing"`
+	FollowTarget            string                 `json:"followTarget"`
+	IsSitting               bool                   `json:"isSitting"`
+	SitObject               string                 `json:"sitObject"`
+	LastUpdate              time.Time              `json:"lastUpdate"`
+	IdleBehaviorMinInterval int                    `json:"idleBehaviorMinInterval"`
+	IdleBehaviorMaxInterval int                    `json:"idleBehaviorMaxInterval"`
+	NearbyAvatars           map[string]*AvatarInfo `json:"nearbyAvatars"`
+	AutoGreetEnabled        bool                   `json:"autoGreetEnabled"`
+	AutoGreetMacro          string                 `json:"autoGreetMacro,omitempty"`
 }
 
 // LogEntry represents a chat or system log entry
 type LogEntry struct {
 	Timestamp time.Time `json:"timestamp"`
-	Type      string    `json:"type"` // "chat", "im", "system", "movement"
+	Type      string    `json:"type"` // "chat", "im", "system", "movement", "avatar"
 	Avatar    string    `json:"avatar"`
 	Message   string    `json:"message"`
 	Response  string    `json:"response,omitempty"`
@@ -82,7 +95,7 @@ type NearbyObject struct {
 
 // MacroAction represents a single recorded action
 type MacroAction struct {
-	Type      string                 `json:"type"`      // "walk", "teleport", "sit", "stand", "say", "wait"
+	Type      string                 `json:"type"`      // "walk", "teleport", "sit", "stand", "tell", "wait", "whisper"
 	Timestamp time.Time              `json:"timestamp"`
 	Data      map[string]interface{} `json:"data"`
 }
@@ -97,6 +110,7 @@ type Macro struct {
 	Duration     time.Duration `json:"duration"`
 	Tags         []string      `json:"tags"`         // Tags for categorizing macros
 	IdleBehavior bool          `json:"idleBehavior"` // Mark as idle behavior
+	AutoGreet    bool          `json:"autoGreet"`    // Mark as auto-greet macro
 }
 
 // MacroRecording represents an active recording session
@@ -119,4 +133,10 @@ type LlamaRequest struct {
 type LlamaResponse struct {
 	Response string `json:"response"`
 	Done     bool   `json:"done"`
+}
+
+// AutoGreetRequest represents an auto-greet configuration request
+type AutoGreetRequest struct {
+	Enabled   bool   `json:"enabled"`
+	MacroName string `json:"macroName,omitempty"`
 }
