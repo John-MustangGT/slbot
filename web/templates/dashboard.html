@@ -286,7 +286,7 @@
                                 <p class="avatar-position">Position: {{printf "%.0f, %.0f, %.0f" $avatar.Position.X $avatar.Position.Y $avatar.Position.Z}}</p>
                                 <p class="avatar-times">
                                     First seen: {{$avatar.FirstSeen.Format "15:04:05"}}<br>
-                                    Last seen: {{$avatar.LastSeen.Format "15:04:05"}} ({{formatDuration (since $avatar.LastSeen)}} ago)
+                                    Last seen: {{$avatar.LastSeen.Format "15:04:05"}}
                                 </p>
                             </div>
                             <div class="avatar-actions">
