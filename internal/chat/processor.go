@@ -101,13 +101,13 @@ func (p *Processor) Start(ctx context.Context) error {
 // setupNotifications sets up Corrade notifications for chat events
 func (p *Processor) setupNotifications() error {
 	// Set up notification for LocalChat
-	err := p.corradeClient.SetupNotification("LocalChat", fmt.Sprintf("http://localhost:%d/corrade/notifications", p.config.Bot.WebPort))
+	err := p.corradeClient.SetupNotification("local", fmt.Sprintf("http://localhost:%d/corrade/notifications", p.config.Bot.WebPort))
 	if err != nil {
 		log.Printf("Failed to setup LocalChat notification: %v", err)
 	}
 
 	// Set up notification for InstantMessage
-	err = p.corradeClient.SetupNotification("InstantMessage", fmt.Sprintf("http://localhost:%d/corrade/notifications", p.config.Bot.WebPort))
+	err = p.corradeClient.SetupNotification("message", fmt.Sprintf("http://localhost:%d/corrade/notifications", p.config.Bot.WebPort))
 	if err != nil {
 		log.Printf("Failed to setup InstantMessage notification: %v", err)
 	}
@@ -124,7 +124,7 @@ func (p *Processor) HandleNotification(notification map[string]interface{}) {
 	}
 
 	// Process LocalChat and InstantMessage events
-	if eventType == "LocalChat" || eventType == "InstantMessage" {
+	if eventType == "local" || eventType == "message" {
 		// Extract message data
 		avatar, _ := notification["FirstName"].(string)
 		lastName, _ := notification["LastName"].(string)
