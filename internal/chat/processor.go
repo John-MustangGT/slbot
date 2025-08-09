@@ -679,6 +679,13 @@ func (p *Processor) idleBehaviorRoutine(ctx context.Context) {
 		case <-p.idleBehaviorStopChan:
 			return
 		case <-ticker.C:
+			// Check if any idle behavior macros are defined
+			idleMacros := p.macroManager.GetIdleBehaviorMacros()
+			if len(idleMacros) == 0 {
+				// No idle behaviors defined, skip this cycle
+				continue
+			}
+
 			// Check if we should start idle behaviors
 			timeSinceLastInteraction := time.Since(p.lastInteractionTime)
 			
@@ -706,6 +713,13 @@ func (p *Processor) runIdleBehaviors(ctx context.Context) {
 		case <-p.idleBehaviorStopChan:
 			return
 		default:
+			// Check if idle behaviors are still available
+			idleMacros := p.macroManager.GetIdleBehaviorMacros()
+			if len(idleMacros) == 0 {
+				log.Println("No idle behavior macros available, stopping idle routine")
+				return
+			}
+
 			// Check if we should stop idle behaviors (new interaction)
 			timeSinceLastInteraction := time.Since(p.lastInteractionTime)
 			idleTimeout := time.Duration(p.config.Bot.IdleTimeout) * time.Minute
@@ -730,6 +744,9 @@ func (p *Processor) runIdleBehaviors(ctx context.Context) {
 			// Try to play a random idle behavior
 			if err := p.macroManager.PlayRandomIdleBehavior(); err != nil {
 				log.Printf("Could not play idle behavior: %v", err)
+				// If we can't play idle behaviors, wait before trying again
+				time.Sleep(5 * time.Minute)
+				continue
 			} else {
 				p.addLog(types.LogEntry{
 					Timestamp: time.Now(),
@@ -780,8 +797,14 @@ func (p *Processor) StopIdleBehaviors() {
 	}
 }
 
-// IsIdle returns whether the bot is currently in idle mode
+// IsIdle returns whether the bot is currently in idle mode and has idle behaviors available
 func (p *Processor) IsIdle() bool {
+	// Check if any idle behavior macros are defined
+	idleMacros := p.macroManager.GetIdleBehaviorMacros()
+	if len(idleMacros) == 0 {
+		return false // Not considered idle if no idle behaviors are defined
+	}
+
 	idleTimeout := time.Duration(p.config.Bot.IdleTimeout) * time.Minute
 	return time.Since(p.lastInteractionTime) >= idleTimeout
 }
