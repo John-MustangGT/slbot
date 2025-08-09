@@ -20,6 +20,7 @@ type Client struct {
 	config     config.CorradeConfig
 	httpClient *http.Client
 	status     types.BotStatus
+	botName    string // Store the bot's own name for position queries
 }
 
 // NewClient creates a new Corrade client
@@ -31,12 +32,19 @@ func NewClient(cfg config.CorradeConfig) *Client {
 			IsOnline:   false,
 			LastUpdate: time.Now(),
 		},
+		botName: "", // Will be set when we have bot config
 	}
+}
+
+// SetBotName sets the bot's name for position queries
+func (c *Client) SetBotName(name string) {
+	c.botName = name
 }
 
 // TestConnection tests the connection to Corrade
 func (c *Client) TestConnection() error {
-	_, err := c.sendCommand("getstatus", nil)
+	// Use getregiondata as a test since it's a known valid command
+	_, err := c.sendCommand("getregiondata", nil)
 	return err
 }
 
@@ -91,7 +99,7 @@ func (c *Client) Say(message string) error {
 		"message": message,
 		"entity": "local",
 		"type": "Normal",
-	}
+        }
 	_, err := c.sendCommand("tell", params)
 	return err
 }
@@ -187,41 +195,35 @@ func (c *Client) GetAvatarPosition(avatar string) (types.Position, error) {
 	return pos, nil
 }
 
-// GetOwnPosition gets the bot's current position
+// GetOwnPosition gets the bot's current position using getavatardata
 func (c *Client) GetOwnPosition() types.Position {
-	// Try to get position from getstatus command first
-	response, err := c.sendCommand("getstatus", nil)
+	if c.botName == "" {
+		log.Printf("Bot name not set, cannot get own position")
+		return types.Position{}
+	}
+
+	// Split bot name into first and last name
+	parts := strings.Split(c.botName, " ")
+	params := map[string]string{
+		"firstname": parts[0],
+	}
+	
+	// Add lastname if available
+	if len(parts) > 1 {
+		params["lastname"] = parts[1]
+	}
+
+	response, err := c.sendCommand("getavatardata", params)
 	if err != nil {
-		log.Printf("Error getting status: %v", err)
+		log.Printf("Error getting own avatar data: %v", err)
 		return types.Position{}
 	}
 
 	pos := types.Position{}
-	// Try to parse position from getstatus response
-	// The exact format depends on what getstatus returns
+	// Try to parse position from response
 	if strings.Contains(response, "Position") || strings.Contains(response, "GlobalPosition") {
-		// Look for coordinate patterns in the response
 		re := regexp.MustCompile(`(?:Position|GlobalPosition).*?(\d+(?:\.\d+)?).*?(\d+(?:\.\d+)?).*?(\d+(?:\.\d+)?)`)
 		matches := re.FindStringSubmatch(response)
-		if len(matches) >= 4 {
-			fmt.Sscanf(matches[1], "%f", &pos.X)
-			fmt.Sscanf(matches[2], "%f", &pos.Y)
-			fmt.Sscanf(matches[3], "%f", &pos.Z)
-			return pos
-		}
-	}
-
-	// If getstatus doesn't provide position, try getregiondata
-	regionResponse, err := c.sendCommand("getregiondata", nil)
-	if err != nil {
-		log.Printf("Error getting region data: %v", err)
-		return types.Position{}
-	}
-
-	// Try to parse position from region data
-	if strings.Contains(regionResponse, "Position") || strings.Contains(regionResponse, "GlobalPosition") {
-		re := regexp.MustCompile(`(?:Position|GlobalPosition).*?(\d+(?:\.\d+)?).*?(\d+(?:\.\d+)?).*?(\d+(?:\.\d+)?)`)
-		matches := re.FindStringSubmatch(regionResponse)
 		if len(matches) >= 4 {
 			fmt.Sscanf(matches[1], "%f", &pos.X)
 			fmt.Sscanf(matches[2], "%f", &pos.Y)

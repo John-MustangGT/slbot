@@ -55,6 +55,9 @@ func NewProcessor(cfg *config.Config, corradeClient *corrade.Client) *Processor 
 	// Initialize macro manager
 	processor.macroManager = macros.NewManager(cfg, corradeClient)
 
+	// Set the bot name in the corrade client for position queries
+	processor.corradeClient.SetBotName(cfg.Bot.Name)
+
 	return processor
 }
 
