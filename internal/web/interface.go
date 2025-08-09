@@ -115,6 +115,7 @@ func (w *Interface) corradeNotificationHandler(writer http.ResponseWriter, reque
 	var notification map[string]interface{}
 	
 	if err := json.NewDecoder(request.Body).Decode(&notification); err != nil {
+		log.Printf("DEBUG: %q", notification)
 		log.Printf("Error decoding Corrade notification: %v", err)
 		http.Error(writer, "Bad Request", http.StatusBadRequest)
 		return
@@ -132,6 +133,9 @@ func (w *Interface) corradeNotificationHandler(writer http.ResponseWriter, reque
 func (w *Interface) loadTemplates() error {
 	templatePath := filepath.Join("web", "templates", "*.html")
 	templates, err := template.New("").Funcs(template.FuncMap{
+		"since": func(t time.Time) time.Duration {
+        		return time.Since(t)
+    		},
 		"add": func(a, b int) int {
 			return a + b
 		},
@@ -139,6 +143,9 @@ func (w *Interface) loadTemplates() error {
 			if d < time.Minute {
 				return fmt.Sprintf("%.0fs", d.Seconds())
 			}
+			if d < time.Hour {
+            			return fmt.Sprintf("%.0fm", d.Minutes())
+        		}
 			return fmt.Sprintf("%.0fm", d.Minutes())
 		},
 	}).ParseGlob(templatePath)
