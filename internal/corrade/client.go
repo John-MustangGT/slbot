@@ -89,18 +89,21 @@ func (c *Client) SetupNotification(eventType, callbackURL string) error {
 func (c *Client) Say(message string) error {
 	params := map[string]string{
 		"message": message,
+		"entity": "local",
+		"type": "Normal",
 	}
-	_, err := c.sendCommand("say", params)
+	_, err := c.sendCommand("tell", params)
 	return err
 }
 
 // Whisper makes the bot whisper to a specific avatar
 func (c *Client) Whisper(avatar, message string) error {
 	params := map[string]string{
-		"avatar":  avatar,
+		"agent":  avatar,
 		"message": message,
+		"entity": "avatar",
 	}
-	_, err := c.sendCommand("whisper", params)
+	_, err := c.sendCommand("tell", params)
 	return err
 }
 
