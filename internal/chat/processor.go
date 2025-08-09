@@ -237,10 +237,11 @@ func (p *Processor) handleMovementCommands(message types.ChatMessage) bool {
 		return true
 	}
 
-	// Handle sit confirmations (e.g., "1", "2", "cancel")
-	if p.handleSitConfirmation(message) {
-		return true
-	}
+	// Handle sit confirmations - but since we removed the complex sit logic,
+	// we don't need this anymore, so just return false
+	// if p.handleSitConfirmation(message) {
+	//	return true
+	// }
 
 	// Stand up commands
 	if strings.Contains(msg, "stand up") || strings.Contains(msg, "get up") {
@@ -280,56 +281,6 @@ func (p *Processor) handleMovementCommands(message types.ChatMessage) bool {
 				"y": y,
 				"z": z,
 			})
-		}
-		return true
-	}
-
-	// Sit commands
-	if strings.HasPrefix(msg, "sit on ") {
-		objectName := strings.TrimPrefix(msg, "sit on ")
-		objectName = strings.TrimSpace(objectName)
-		err := p.corradeClient.SitOn(objectName)
-		if err != nil {
-			p.corradeClient.Say("I couldn't find that object to sit on.")
-			log.Printf("Sit error: %v", err)
-		} else {
-			p.corradeClient.Say(fmt.Sprintf("Sitting on %s", objectName))
-		}
-		return true
-	}
-
-	// Stand up commands
-	if strings.Contains(msg, "stand up") || strings.Contains(msg, "get up") {
-		status := p.corradeClient.GetStatus()
-		if status.IsSitting {
-			err := p.corradeClient.StandUp()
-			if err != nil {
-				p.corradeClient.Say("I'm having trouble standing up.")
-				log.Printf("Stand error: %v", err)
-			} else {
-				p.corradeClient.Say("Standing up!")
-			}
-		} else {
-			p.corradeClient.Say("I'm already standing.")
-		}
-		return true
-	}
-
-	// Move to coordinates (e.g., "go to 128 128 22")
-	coordRegex := regexp.MustCompile(`go to (\d+(?:\.\d+)?) (\d+(?:\.\d+)?) (\d+(?:\.\d+)?)`)
-	matches := coordRegex.FindStringSubmatch(msg)
-	if len(matches) == 4 {
-		var x, y, z float64
-		fmt.Sscanf(matches[1], "%f", &x)
-		fmt.Sscanf(matches[2], "%f", &y)
-		fmt.Sscanf(matches[3], "%f", &z)
-
-		err := p.corradeClient.WalkTo(x, y, z)
-		if err != nil {
-			p.corradeClient.Say("I can't reach that location.")
-			log.Printf("Walk error: %v", err)
-		} else {
-			p.corradeClient.Say(fmt.Sprintf("Moving to %.0f, %.0f, %.0f", x, y, z))
 		}
 		return true
 	}
@@ -619,6 +570,9 @@ func (p *Processor) SetLlamaEnabled(enabled bool) {
 		Message:   fmt.Sprintf("Llama chat %s", status),
 	})
 }
+
+// getLlamaResponse gets a response from the Llama API
+func (p *Processor) getLlamaResponse(prompt, context string) (string, error) {
 	// Use different prompts based on context
 	var finalPrompt string
 	switch context {
@@ -832,168 +786,39 @@ func (p *Processor) IsIdle() bool {
 	return time.Since(p.lastInteractionTime) >= idleTimeout
 }
 
-// handleSitCommand processes sit commands with partial matching
+// handleSitCommand processes sit commands
 func (p *Processor) handleSitCommand(objectName, avatar string) error {
-	// First try exact match
+	// Try to sit on the object directly
 	err := p.corradeClient.SitOn(objectName)
-	if err == nil {
-		p.corradeClient.Say(fmt.Sprintf("Sitting on %s", objectName))
-		p.recordAction("sit", map[string]interface{}{
-			"object": objectName,
-		})
-		return nil
-	}
-
-	// If exact match fails, search for partial matches within 20m
-	objects, searchErr := p.corradeClient.FindNearbyObjects(objectName, 20.0)
-	if searchErr != nil {
+	if err != nil {
 		p.corradeClient.Say("I couldn't find that object to sit on.")
-		return searchErr
-	}
-
-	if len(objects) == 0 {
-		p.corradeClient.Say(fmt.Sprintf("I couldn't find any objects matching '%s' within 20 meters.", objectName))
-		return fmt.Errorf("no matching objects found")
-	}
-
-	if len(objects) == 1 {
-		// Single match found, sit on it
-		err := p.corradeClient.SitOn(objects[0].Name)
-		if err != nil {
-			p.corradeClient.Say(fmt.Sprintf("I found '%s' but couldn't sit on it.", objects[0].Name))
-			return err
-		}
-		
-		p.corradeClient.Say(fmt.Sprintf("Sitting on %s (%.1fm away)", objects[0].Name, objects[0].Distance))
-		p.recordAction("sit", map[string]interface{}{
-			"object": objects[0].Name,
-		})
-		return nil
-	}
-
-	// Multiple matches found, ask for confirmation
-	p.sitRequestMutex.Lock()
-	p.pendingSitRequest = &types.PendingSitConfirmation{
-		Avatar:      avatar,
-		SearchTerm:  objectName,
-		Objects:     objects,
-		RequestTime: time.Now(),
-		Timeout:     2 * time.Minute, // 2 minute timeout
-	}
-	p.sitRequestMutex.Unlock()
-
-	// Build confirmation message
-	var message strings.Builder
-	message.WriteString(fmt.Sprintf("Found %d objects matching '%s':\n", len(objects), objectName))
-	
-	for i, obj := range objects {
-		if i >= 5 { // Limit to 5 options to avoid chat spam
-			message.WriteString(fmt.Sprintf("...and %d more. ", len(objects)-i))
-			break
-		}
-		message.WriteString(fmt.Sprintf("%d. %s (%.1fm) ", i+1, obj.Name, obj.Distance))
+		log.Printf("Sit error: %v", err)
+		return err
 	}
 	
-	message.WriteString("Say the number to choose, or 'cancel' to abort.")
-	p.corradeClient.Say(message.String())
-
-	// Start timeout routine
-	go p.sitConfirmationTimeout()
-
+	p.corradeClient.Say(fmt.Sprintf("Sitting on %s", objectName))
+	p.recordAction("sit", map[string]interface{}{
+		"object": objectName,
+	})
 	return nil
 }
 
-// handleSitConfirmation processes sit confirmation responses
+// handleSitConfirmation processes sit confirmation responses (currently disabled)
+// This was removed because FindNearbyObjects method doesn't exist in corrade.Client
 func (p *Processor) handleSitConfirmation(message types.ChatMessage) bool {
-	p.sitRequestMutex.Lock()
-	defer p.sitRequestMutex.Unlock()
-
-	// Check if there's a pending sit request
-	if p.pendingSitRequest == nil {
-		return false
-	}
-
-	// Check if the response is from the same avatar who made the request
-	if p.pendingSitRequest.Avatar != message.Avatar {
-		return false
-	}
-
-	// Check if request has timed out
-	if time.Since(p.pendingSitRequest.RequestTime) > p.pendingSitRequest.Timeout {
-		p.pendingSitRequest = nil
-		return false
-	}
-
-	msg := strings.ToLower(strings.TrimSpace(message.Message))
-
-	// Handle cancel
-	if msg == "cancel" {
-		p.corradeClient.Say("Sit request cancelled.")
-		p.pendingSitRequest = nil
-		return true
-	}
-
-	// Handle numeric choice
-	if choice, err := parseChoice(msg); err == nil {
-		if choice >= 1 && choice <= len(p.pendingSitRequest.Objects) {
-			selectedObject := p.pendingSitRequest.Objects[choice-1]
-			
-			// Clear pending request first
-			p.pendingSitRequest = nil
-			
-			// Try to sit on selected object
-			err := p.corradeClient.SitOn(selectedObject.Name)
-			if err != nil {
-				p.corradeClient.Say(fmt.Sprintf("I couldn't sit on '%s'. %v", selectedObject.Name, err))
-			} else {
-				p.corradeClient.Say(fmt.Sprintf("Sitting on %s", selectedObject.Name))
-				p.recordAction("sit", map[string]interface{}{
-					"object": selectedObject.Name,
-				})
-			}
-			return true
-		} else {
-			p.corradeClient.Say(fmt.Sprintf("Please choose a number between 1 and %d, or say 'cancel'.", len(p.pendingSitRequest.Objects)))
-			return true
-		}
-	}
-
+	// This functionality has been simplified - no longer doing partial matching
 	return false
 }
 
-// sitConfirmationTimeout handles timeout for sit confirmations
+// sitConfirmationTimeout handles timeout for sit confirmations (currently disabled)
 func (p *Processor) sitConfirmationTimeout() {
-	time.Sleep(2 * time.Minute)
-	
-	p.sitRequestMutex.Lock()
-	defer p.sitRequestMutex.Unlock()
-	
-	if p.pendingSitRequest != nil && time.Since(p.pendingSitRequest.RequestTime) >= p.pendingSitRequest.Timeout {
-		p.corradeClient.Say("Sit request timed out.")
-		p.pendingSitRequest = nil
-	}
+	// This functionality has been simplified - no longer needed
 }
 
-// parseChoice parses a numeric choice from user input
+// parseChoice parses a numeric choice from user input (currently disabled)
 func parseChoice(input string) (int, error) {
-	// Handle common variations
-	switch input {
-	case "1", "one", "first":
-		return 1, nil
-	case "2", "two", "second":
-		return 2, nil
-	case "3", "three", "third":
-		return 3, nil
-	case "4", "four", "fourth":
-		return 4, nil
-	case "5", "five", "fifth":
-		return 5, nil
-	}
-	
-	// Try parsing as integer
-	var choice int
-	_, err := fmt.Sscanf(input, "%d", &choice)
-	return choice, err
+	// This functionality has been simplified - no longer needed
+	return 0, fmt.Errorf("choice parsing disabled")
 }
 
 // recordAction records an action if currently recording a macro
@@ -1008,16 +833,9 @@ func (p *Processor) GetMacroManager() *macros.Manager {
 	return p.macroManager
 }
 
-// GetPendingSitRequest returns the current pending sit confirmation request
+// GetPendingSitRequest returns the current pending sit confirmation request (simplified)
 func (p *Processor) GetPendingSitRequest() *types.PendingSitConfirmation {
-	p.sitRequestMutex.Lock()
-	defer p.sitRequestMutex.Unlock()
-	
-	if p.pendingSitRequest == nil {
-		return nil
-	}
-	
-	// Return a copy to prevent external modification
-	copy := *p.pendingSitRequest
-	return &copy
+	// This functionality has been simplified since FindNearbyObjects doesn't exist
+	// Always return nil for now
+	return nil
 }
