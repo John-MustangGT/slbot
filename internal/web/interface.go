@@ -2,6 +2,7 @@ package web
 
 import (
 	"context"
+   "strings"
 	"encoding/json"
 	"fmt"
 	"html/template"
@@ -175,11 +176,46 @@ func (w *Interface) Stop(ctx context.Context) error {
 func (w *Interface) corradeNotificationHandler(writer http.ResponseWriter, request *http.Request) {
 	var notification map[string]interface{}
 
-   printHTTPRequest(request)
+	// printHTTPRequest(request)
 
-	if err := json.NewDecoder(request.Body).Decode(&notification); err != nil {
-		log.Printf("Error decoding Corrade notification: %v", err)
-		http.Error(writer, "Bad Request", http.StatusBadRequest)
+	// Check content type to handle both JSON and form-encoded data
+	contentType := request.Header.Get("Content-Type")
+	
+	if strings.Contains(contentType, "application/json") {
+		// Handle JSON data
+		if err := json.NewDecoder(request.Body).Decode(&notification); err != nil {
+			log.Printf("Error decoding Corrade JSON notification: %v", err)
+			http.Error(writer, "Bad Request", http.StatusBadRequest)
+			return
+		}
+	} else if strings.Contains(contentType, "application/x-www-form-urlencoded") {
+		// Handle form-encoded data
+		if err := request.ParseForm(); err != nil {
+			log.Printf("Error parsing Corrade form notification: %v", err)
+			http.Error(writer, "Bad Request", http.StatusBadRequest)
+			return
+		}
+		
+		// Convert form values to map[string]interface{}
+		notification = make(map[string]interface{})
+		for key, values := range request.Form {
+			if len(values) == 1 {
+				// Single value - try to parse as JSON first, fallback to string
+				value := values[0]
+				var jsonValue interface{}
+				if err := json.Unmarshal([]byte(value), &jsonValue); err == nil {
+					notification[key] = jsonValue
+				} else {
+					notification[key] = value
+				}
+			} else {
+				// Multiple values - keep as string slice
+				notification[key] = values
+			}
+		}
+	} else {
+		log.Printf("Unsupported content type: %s", contentType)
+		http.Error(writer, "Unsupported Media Type", http.StatusUnsupportedMediaType)
 		return
 	}
 

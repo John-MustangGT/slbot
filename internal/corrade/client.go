@@ -183,6 +183,8 @@ func (c *Client) GetAvatarPosition(avatar string) (types.Position, error) {
 		return types.Position{}, err
 	}
 
+   log.Printf("getavatardata: %s", response)
+
 	// Parse position from response
 	pos := types.Position{}
 	if strings.Contains(response, "Position") || strings.Contains(response, "GlobalPosition") {
@@ -353,19 +355,24 @@ func (c *Client) MarkAvatarGreeted(name string) {
 
 // GetCurrentRegion gets the current region/sim name
 func (c *Client) GetCurrentRegion() string {
-	response, err := c.sendCommand("getregiondata", nil)
+	params := map[string]string{
+		"data":   "Name",
+   }  
+	response, err := c.sendCommand("getregiondata", params)
 	if err != nil {
 		return "Unknown"
 	}
 
-	// Parse region name from response (simplified)
-	if strings.Contains(response, "RegionName") {
-		re := regexp.MustCompile(`RegionName.*?"([^"]+)"`)
-		matches := re.FindStringSubmatch(response)
-		if len(matches) >= 2 {
-			return matches[1]
-		}
-	}
+   answers, err := url.ParseQuery(response)
+   if err != nil {
+      return "Unknown"
+   }
+   if answers.Has("data") {
+      data := strings.Split(answers.Get("data"), ",")
+      if data[0] == "Name" {
+         return data[1]
+      }
+   }
 	return "Unknown"
 }
 
