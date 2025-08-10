@@ -28,10 +28,10 @@ type FollowTarget struct {
 
 // AvatarInfo represents an avatar in the region
 type AvatarInfo struct {
-	Name     string    `json:"name"`
-	UUID     string    `json:"uuid"`
-	Position Position  `json:"position"`
-	LastSeen time.Time `json:"lastSeen"`
+	Name      string    `json:"name"`
+	UUID      string    `json:"uuid"`
+	Position  Position  `json:"position"`
+	LastSeen  time.Time `json:"lastSeen"`
 	FirstSeen time.Time `json:"firstSeen"`
 	IsGreeted bool      `json:"isGreeted"`
 }
@@ -79,11 +79,11 @@ type WalkRequest struct {
 
 // PendingSitConfirmation represents a pending sit confirmation request
 type PendingSitConfirmation struct {
-	Avatar      string                  `json:"avatar"`
-	SearchTerm  string                  `json:"searchTerm"`
-	Objects     []NearbyObject          `json:"objects"`
-	RequestTime time.Time               `json:"requestTime"`
-	Timeout     time.Duration           `json:"timeout"`
+	Avatar      string         `json:"avatar"`
+	SearchTerm  string         `json:"searchTerm"`
+	Objects     []NearbyObject `json:"objects"`
+	RequestTime time.Time      `json:"requestTime"`
+	Timeout     time.Duration  `json:"timeout"`
 }
 
 // NearbyObject represents an object found near the bot
@@ -95,7 +95,7 @@ type NearbyObject struct {
 
 // MacroAction represents a single recorded action
 type MacroAction struct {
-	Type      string                 `json:"type"`      // "walk", "teleport", "sit", "stand", "tell", "wait", "whisper"
+	Type      string                 `json:"type"` // "walk", "teleport", "sit", "stand", "tell", "wait", "whisper"
 	Timestamp time.Time              `json:"timestamp"`
 	Data      map[string]interface{} `json:"data"`
 }

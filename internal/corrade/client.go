@@ -18,12 +18,12 @@ import (
 
 // Client handles all Corrade communication
 type Client struct {
-	config        config.CorradeConfig
-	httpClient    *http.Client
-	status        types.BotStatus
-	botName       string // Store the bot's own name for position queries
-	botUUID       string // Store the bot's UUID
-	avatarsMutex  sync.RWMutex
+	config       config.CorradeConfig
+	httpClient   *http.Client
+	status       types.BotStatus
+	botName      string // Store the bot's own name for position queries
+	botUUID      string // Store the bot's UUID
+	avatarsMutex sync.RWMutex
 }
 
 // NewClient creates a new Corrade client
@@ -171,7 +171,7 @@ func (c *Client) GetAvatarPosition(avatar string) (types.Position, error) {
 	params := map[string]string{
 		"firstname": strings.Split(avatar, " ")[0],
 	}
-	
+
 	// Add lastname if available
 	parts := strings.Split(avatar, " ")
 	if len(parts) > 1 {
@@ -210,7 +210,7 @@ func (c *Client) GetOwnPosition() types.Position {
 	params := map[string]string{
 		"firstname": parts[0],
 	}
-	
+
 	// Add lastname if available
 	if len(parts) > 1 {
 		params["lastname"] = parts[1]
@@ -249,37 +249,37 @@ func (c *Client) GetNearbyAvatars() (map[string]*types.AvatarInfo, error) {
 
 	currentTime := time.Now()
 	currentAvatars := make(map[string]string) // name -> uuid mapping for this scan
-	
+
 	// Parse avatar data from response
 	// This regex should be adjusted based on the actual response format from Corrade
 	avatarRegex := regexp.MustCompile(`FirstName.*?([^,\s]+).*?LastName.*?([^,\s]*).*?GlobalPosition.*?<(\d+(?:\.\d+)?),\s*(\d+(?:\.\d+)?),\s*(\d+(?:\.\d+)?)>.*?UUID.*?([a-fA-F0-9-]+)`)
 	matches := avatarRegex.FindAllStringSubmatch(response, -1)
-	
+
 	for _, match := range matches {
 		if len(match) >= 7 {
 			firstName := strings.Trim(match[1], `"`)
 			lastName := strings.Trim(match[2], `"`)
 			uuid := match[6]
-			
+
 			// Skip if this is the bot itself
 			if firstName == strings.Split(c.botName, " ")[0] {
 				continue
 			}
-			
+
 			var x, y, z float64
 			fmt.Sscanf(match[3], "%f", &x)
 			fmt.Sscanf(match[4], "%f", &y)
 			fmt.Sscanf(match[5], "%f", &z)
-			
+
 			name := firstName
 			if lastName != "" && lastName != "Resident" {
 				name += " " + lastName
 			}
-			
+
 			currentAvatars[name] = uuid
-			
+
 			pos := types.Position{X: x, Y: y, Z: z}
-			
+
 			if existingAvatar, exists := c.status.NearbyAvatars[name]; exists {
 				// Update existing avatar
 				existingAvatar.Position = pos
@@ -299,7 +299,7 @@ func (c *Client) GetNearbyAvatars() (map[string]*types.AvatarInfo, error) {
 			}
 		}
 	}
-	
+
 	// Remove avatars that are no longer in the region (not seen for 2 minutes)
 	for name, avatar := range c.status.NearbyAvatars {
 		if _, stillPresent := currentAvatars[name]; !stillPresent {
@@ -309,7 +309,7 @@ func (c *Client) GetNearbyAvatars() (map[string]*types.AvatarInfo, error) {
 			}
 		}
 	}
-	
+
 	// Return a copy of the current avatars
 	result := make(map[string]*types.AvatarInfo)
 	for name, avatar := range c.status.NearbyAvatars {
@@ -322,7 +322,7 @@ func (c *Client) GetNearbyAvatars() (map[string]*types.AvatarInfo, error) {
 			IsGreeted: avatar.IsGreeted,
 		}
 	}
-	
+
 	return result, nil
 }
 
@@ -330,14 +330,14 @@ func (c *Client) GetNearbyAvatars() (map[string]*types.AvatarInfo, error) {
 func (c *Client) GetNewAvatars() []*types.AvatarInfo {
 	c.avatarsMutex.RLock()
 	defer c.avatarsMutex.RUnlock()
-	
+
 	var newAvatars []*types.AvatarInfo
 	for _, avatar := range c.status.NearbyAvatars {
 		if !avatar.IsGreeted {
 			newAvatars = append(newAvatars, avatar)
 		}
 	}
-	
+
 	return newAvatars
 }
 
@@ -345,7 +345,7 @@ func (c *Client) GetNewAvatars() []*types.AvatarInfo {
 func (c *Client) MarkAvatarGreeted(name string) {
 	c.avatarsMutex.Lock()
 	defer c.avatarsMutex.Unlock()
-	
+
 	if avatar, exists := c.status.NearbyAvatars[name]; exists {
 		avatar.IsGreeted = true
 	}
@@ -386,7 +386,7 @@ func (c *Client) UpdateStatus() types.BotStatus {
 // UpdateStatusWithConfig updates the bot's status including configuration
 func (c *Client) UpdateStatusWithConfig(config interface{}) types.BotStatus {
 	status := c.UpdateStatus()
-	
+
 	// Add configuration data if provided
 	if cfg, ok := config.(interface {
 		GetIdleBehaviorMinInterval() int
@@ -395,7 +395,7 @@ func (c *Client) UpdateStatusWithConfig(config interface{}) types.BotStatus {
 		status.IdleBehaviorMinInterval = cfg.GetIdleBehaviorMinInterval()
 		status.IdleBehaviorMaxInterval = cfg.GetIdleBehaviorMaxInterval()
 	}
-	
+
 	return status
 }
 
@@ -404,7 +404,7 @@ func (c *Client) GetStatus() types.BotStatus {
 	// Make a copy to prevent external modification of NearbyAvatars
 	statusCopy := c.status
 	statusCopy.NearbyAvatars = make(map[string]*types.AvatarInfo)
-	
+
 	c.avatarsMutex.RLock()
 	for name, avatar := range c.status.NearbyAvatars {
 		statusCopy.NearbyAvatars[name] = &types.AvatarInfo{
@@ -417,7 +417,7 @@ func (c *Client) GetStatus() types.BotStatus {
 		}
 	}
 	c.avatarsMutex.RUnlock()
-	
+
 	return statusCopy
 }
 

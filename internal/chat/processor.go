@@ -22,23 +22,23 @@ import (
 
 // Processor handles chat processing and AI responses
 type Processor struct {
-	config                   *config.Config
-	corradeClient            *corrade.Client
-	macroManager             *macros.Manager
-	httpClient               *http.Client
-	followTarget             *types.FollowTarget
-	isFollowing              bool
-	logs                     []types.LogEntry
-	logsMutex                sync.RWMutex
-	llamaEnabled             bool
-	lastInteractionTime      time.Time
-	idleBehaviorRunning      bool
-	idleBehaviorStopChan     chan struct{}
-	pendingSitRequest        *types.PendingSitConfirmation
-	sitRequestMutex          sync.Mutex
-	avatarTrackingRunning    bool
-	avatarTrackingStopChan   chan struct{}
-	lastAvatarScan           time.Time
+	config                 *config.Config
+	corradeClient          *corrade.Client
+	macroManager           *macros.Manager
+	httpClient             *http.Client
+	followTarget           *types.FollowTarget
+	isFollowing            bool
+	logs                   []types.LogEntry
+	logsMutex              sync.RWMutex
+	llamaEnabled           bool
+	lastInteractionTime    time.Time
+	idleBehaviorRunning    bool
+	idleBehaviorStopChan   chan struct{}
+	pendingSitRequest      *types.PendingSitConfirmation
+	sitRequestMutex        sync.Mutex
+	avatarTrackingRunning  bool
+	avatarTrackingStopChan chan struct{}
+	lastAvatarScan         time.Time
 }
 
 // NewProcessor creates a new chat processor
@@ -73,14 +73,14 @@ func (p *Processor) TestConnection() error {
 		log.Println("Llama chat is disabled - bot will use fallback responses")
 		return nil
 	}
-	
+
 	_, err := p.getLlamaResponse("Hello, are you working?", "chat")
 	if err != nil {
 		log.Printf("Llama connection failed, disabling AI chat: %v", err)
 		p.llamaEnabled = false
 		return nil // Don't fail startup, just disable AI
 	}
-	
+
 	log.Println("Llama connection successful")
 	return nil
 }
@@ -162,13 +162,13 @@ func (p *Processor) scanForNewAvatars() {
 
 	// Get new avatars that haven't been greeted
 	newAvatars := p.corradeClient.GetNewAvatars()
-	
+
 	for _, avatar := range newAvatars {
 		// Only greet avatars that have been in the region for at least 10 seconds
 		// This prevents greeting avatars that are just teleporting through
 		if time.Since(avatar.FirstSeen) >= 10*time.Second {
 			log.Printf("Auto-greeting new avatar: %s", avatar.Name)
-			
+
 			// Play the auto-greet macro
 			err := p.macroManager.PlayAutoGreetMacro(autoGreetMacro, avatar.Name)
 			if err != nil {
@@ -176,7 +176,7 @@ func (p *Processor) scanForNewAvatars() {
 			} else {
 				// Mark avatar as greeted
 				p.corradeClient.MarkAvatarGreeted(avatar.Name)
-				
+
 				// Log the auto-greet
 				p.addLog(types.LogEntry{
 					Timestamp: time.Now(),
@@ -306,7 +306,7 @@ func (p *Processor) processChat(message types.ChatMessage) {
 // handleAvatarCommands processes avatar tracking and auto-greet commands
 func (p *Processor) handleAvatarCommands(message types.ChatMessage) bool {
 	msg := strings.ToLower(message.Message)
-	
+
 	// Check if user is an owner
 	if !p.macroManager.IsOwner(message.Avatar) {
 		return false
@@ -317,17 +317,17 @@ func (p *Processor) handleAvatarCommands(message types.ChatMessage) bool {
 		macroName := strings.TrimPrefix(message.Message, "set autogreet ")
 		macroName = strings.TrimPrefix(macroName, "Set autogreet ")
 		macroName = strings.TrimSpace(macroName)
-		
+
 		// Check if macro exists
 		if _, exists := p.macroManager.GetMacro(macroName); !exists {
 			p.corradeClient.Tell(fmt.Sprintf("Macro '%s' not found.", macroName))
 			return true
 		}
-		
+
 		// Enable auto-greet with this macro
 		p.corradeClient.SetAutoGreet(true, macroName)
 		p.corradeClient.Tell(fmt.Sprintf("Auto-greet enabled using macro '%s'.", macroName))
-		
+
 		p.addLog(types.LogEntry{
 			Timestamp: time.Now(),
 			Type:      "system",
@@ -341,7 +341,7 @@ func (p *Processor) handleAvatarCommands(message types.ChatMessage) bool {
 	if strings.Contains(msg, "disable autogreet") || strings.Contains(msg, "stop autogreet") {
 		p.corradeClient.SetAutoGreet(false, "")
 		p.corradeClient.Tell("Auto-greet disabled.")
-		
+
 		p.addLog(types.LogEntry{
 			Timestamp: time.Now(),
 			Type:      "system",
@@ -387,7 +387,7 @@ func (p *Processor) handleAvatarCommands(message types.ChatMessage) bool {
 		macroName := strings.TrimPrefix(message.Message, "set autogreet macro ")
 		macroName = strings.TrimPrefix(macroName, "Set autogreet macro ")
 		macroName = strings.TrimSpace(macroName)
-		
+
 		err := p.macroManager.SetAutoGreet(macroName, message.Avatar, true)
 		if err != nil {
 			p.corradeClient.Tell(fmt.Sprintf("Cannot set auto-greet macro: %s", err.Error()))
@@ -402,7 +402,7 @@ func (p *Processor) handleAvatarCommands(message types.ChatMessage) bool {
 		macroName := strings.TrimPrefix(message.Message, "unset autogreet macro ")
 		macroName = strings.TrimPrefix(macroName, "Unset autogreet macro ")
 		macroName = strings.TrimSpace(macroName)
-		
+
 		err := p.macroManager.SetAutoGreet(macroName, message.Avatar, false)
 		if err != nil {
 			p.corradeClient.Tell(fmt.Sprintf("Cannot unset auto-greet macro: %s", err.Error()))
@@ -448,7 +448,7 @@ func (p *Processor) handleMovementCommands(message types.ChatMessage) bool {
 				Avatar:    message.Avatar,
 				Message:   fmt.Sprintf("Started following %s", message.Avatar),
 			})
-			
+
 			// Record action if recording
 			p.recordAction("follow", map[string]interface{}{
 				"avatar": message.Avatar,
@@ -469,7 +469,7 @@ func (p *Processor) handleMovementCommands(message types.ChatMessage) bool {
 	if strings.HasPrefix(msg, "sit on ") {
 		objectName := strings.TrimPrefix(msg, "sit on ")
 		objectName = strings.TrimSpace(objectName)
-		
+
 		err := p.handleSitCommand(objectName, message.Avatar)
 		if err != nil {
 			log.Printf("Sit error: %v", err)
@@ -525,7 +525,7 @@ func (p *Processor) handleMovementCommands(message types.ChatMessage) bool {
 // handleMacroCommands processes macro recording and playback commands
 func (p *Processor) handleMacroCommands(message types.ChatMessage) bool {
 	msg := strings.ToLower(message.Message)
-	
+
 	// Check if user is an owner
 	if !p.macroManager.IsOwner(message.Avatar) {
 		return false
@@ -536,7 +536,7 @@ func (p *Processor) handleMacroCommands(message types.ChatMessage) bool {
 		macroName := strings.TrimPrefix(message.Message, "record macro ")
 		macroName = strings.TrimPrefix(macroName, "Record macro ")
 		macroName = strings.TrimSpace(macroName)
-		
+
 		err := p.macroManager.StartRecording(macroName, message.Avatar)
 		if err != nil {
 			p.corradeClient.Tell(fmt.Sprintf("Cannot start recording: %s", err.Error()))
@@ -553,7 +553,7 @@ func (p *Processor) handleMacroCommands(message types.ChatMessage) bool {
 		tags := []string{}
 		isIdleBehavior := false
 		isAutoGreet := false
-		
+
 		// Parse extended stop recording syntax
 		parts := strings.Split(message.Message, " ")
 		for i, part := range parts {
@@ -580,7 +580,7 @@ func (p *Processor) handleMacroCommands(message types.ChatMessage) bool {
 				isAutoGreet = true
 			}
 		}
-		
+
 		err := p.macroManager.StopRecording(description, tags, isIdleBehavior, isAutoGreet)
 		if err != nil {
 			p.corradeClient.Tell(fmt.Sprintf("Cannot stop recording: %s", err.Error()))
@@ -613,7 +613,7 @@ func (p *Processor) handleMacroCommands(message types.ChatMessage) bool {
 		macroName := strings.TrimPrefix(message.Message, "play macro ")
 		macroName = strings.TrimPrefix(macroName, "Play macro ")
 		macroName = strings.TrimSpace(macroName)
-		
+
 		err := p.macroManager.PlayMacro(macroName, message.Avatar)
 		if err != nil {
 			p.corradeClient.Tell(fmt.Sprintf("Cannot play macro: %s", err.Error()))
@@ -643,7 +643,7 @@ func (p *Processor) handleMacroCommands(message types.ChatMessage) bool {
 		macroName := strings.TrimPrefix(message.Message, "delete macro ")
 		macroName = strings.TrimPrefix(macroName, "Delete macro ")
 		macroName = strings.TrimSpace(macroName)
-		
+
 		err := p.macroManager.DeleteMacro(macroName, message.Avatar)
 		if err != nil {
 			p.corradeClient.Tell(fmt.Sprintf("Cannot delete macro: %s", err.Error()))
@@ -658,7 +658,7 @@ func (p *Processor) handleMacroCommands(message types.ChatMessage) bool {
 		macroName := strings.TrimPrefix(message.Message, "set idle ")
 		macroName = strings.TrimPrefix(macroName, "Set idle ")
 		macroName = strings.TrimSpace(macroName)
-		
+
 		err := p.macroManager.SetIdleBehavior(macroName, message.Avatar, true)
 		if err != nil {
 			p.corradeClient.Tell(fmt.Sprintf("Cannot set idle behavior: %s", err.Error()))
@@ -672,7 +672,7 @@ func (p *Processor) handleMacroCommands(message types.ChatMessage) bool {
 		macroName := strings.TrimPrefix(message.Message, "unset idle ")
 		macroName = strings.TrimPrefix(macroName, "Unset idle ")
 		macroName = strings.TrimSpace(macroName)
-		
+
 		err := p.macroManager.SetIdleBehavior(macroName, message.Avatar, false)
 		if err != nil {
 			p.corradeClient.Tell(fmt.Sprintf("Cannot unset idle behavior: %s", err.Error()))
@@ -771,7 +771,7 @@ func (p *Processor) followRoutine(ctx context.Context) {
 // getFallbackResponse returns predefined responses when AI is disabled or fails
 func (p *Processor) getFallbackResponse(context, message string) string {
 	fallbacks := p.config.Prompts.FallbackResponses
-	
+
 	switch context {
 	case "greeting":
 		return fallbacks.Greeting
@@ -780,8 +780,8 @@ func (p *Processor) getFallbackResponse(context, message string) string {
 	case "general":
 		// Check for some basic keywords to provide more specific responses
 		lowerMsg := strings.ToLower(message)
-		if strings.Contains(lowerMsg, "what") || strings.Contains(lowerMsg, "who") || 
-		   strings.Contains(lowerMsg, "how") || strings.Contains(lowerMsg, "why") {
+		if strings.Contains(lowerMsg, "what") || strings.Contains(lowerMsg, "who") ||
+			strings.Contains(lowerMsg, "how") || strings.Contains(lowerMsg, "why") {
 			return fallbacks.General
 		}
 		return fallbacks.General
@@ -798,12 +798,12 @@ func (p *Processor) IsLlamaEnabled() bool {
 // SetLlamaEnabled enables or disables Llama chat at runtime
 func (p *Processor) SetLlamaEnabled(enabled bool) {
 	p.llamaEnabled = enabled
-	
+
 	status := "disabled"
 	if enabled {
 		status = "enabled"
 	}
-	
+
 	p.addLog(types.LogEntry{
 		Timestamp: time.Now(),
 		Type:      "system",
@@ -909,7 +909,7 @@ func (p *Processor) GetFollowTarget() *types.FollowTarget {
 // idleBehaviorRoutine runs idle behaviors when the bot is inactive
 func (p *Processor) idleBehaviorRoutine(ctx context.Context) {
 	idleTimeout := time.Duration(p.config.Bot.IdleTimeout) * time.Minute
-	
+
 	ticker := time.NewTicker(30 * time.Second) // Check every 30 seconds
 	defer ticker.Stop()
 
@@ -929,7 +929,7 @@ func (p *Processor) idleBehaviorRoutine(ctx context.Context) {
 
 			// Check if we should start idle behaviors
 			timeSinceLastInteraction := time.Since(p.lastInteractionTime)
-			
+
 			if timeSinceLastInteraction >= idleTimeout && !p.idleBehaviorRunning {
 				// Start idle behavior routine
 				p.idleBehaviorRunning = true
@@ -946,7 +946,7 @@ func (p *Processor) runIdleBehaviors(ctx context.Context) {
 	}()
 
 	log.Println("Starting idle behavior routine")
-	
+
 	for {
 		select {
 		case <-ctx.Done():
@@ -964,7 +964,7 @@ func (p *Processor) runIdleBehaviors(ctx context.Context) {
 			// Check if we should stop idle behaviors (new interaction)
 			timeSinceLastInteraction := time.Since(p.lastInteractionTime)
 			idleTimeout := time.Duration(p.config.Bot.IdleTimeout) * time.Minute
-			
+
 			if timeSinceLastInteraction < idleTimeout {
 				log.Println("Stopping idle behavior routine due to interaction")
 				return
@@ -1018,13 +1018,13 @@ func (p *Processor) runIdleBehaviors(ctx context.Context) {
 func (p *Processor) getRandomIdleInterval() time.Duration {
 	minInterval := p.config.Bot.IdleBehaviorMinInterval
 	maxInterval := p.config.Bot.IdleBehaviorMaxInterval
-	
+
 	// Validate configuration - ensure max >= min
 	if maxInterval <= minInterval {
 		log.Printf("Warning: maxInterval (%d) <= minInterval (%d), using minInterval", maxInterval, minInterval)
 		return time.Duration(minInterval) * time.Minute
 	}
-	
+
 	// Generate random minutes between min and max (inclusive)
 	randomMinutes := rand.Intn(maxInterval-minInterval+1) + minInterval
 	return time.Duration(randomMinutes) * time.Minute
@@ -1059,7 +1059,7 @@ func (p *Processor) handleSitCommand(objectName, avatar string) error {
 		log.Printf("Sit error: %v", err)
 		return err
 	}
-	
+
 	p.corradeClient.Tell(fmt.Sprintf("Sitting on %s", objectName))
 	p.recordAction("sit", map[string]interface{}{
 		"object": objectName,

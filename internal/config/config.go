@@ -8,11 +8,11 @@ import (
 
 // Config holds all configuration settings
 type Config struct {
-	XMLName  xml.Name      `xml:"config"`
-	Corrade  CorradeConfig `xml:"corrade"`
-	Llama    LlamaConfig   `xml:"llama"`
-	Bot      BotConfig     `xml:"bot"`
-	Prompts  PromptsConfig `xml:"prompts"`
+	XMLName xml.Name      `xml:"config"`
+	Corrade CorradeConfig `xml:"corrade"`
+	Llama   LlamaConfig   `xml:"llama"`
+	Bot     BotConfig     `xml:"bot"`
+	Prompts PromptsConfig `xml:"prompts"`
 }
 
 // CorradeConfig holds Corrade connection settings

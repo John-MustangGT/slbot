@@ -136,7 +136,7 @@ func (m *Manager) StopRecording(description string, tags []string, isIdleBehavio
 	// Add to memory
 	m.macros[macro.Name] = macro
 
-	log.Printf("Saved macro '%s' with %d actions (duration: %v, idle: %v, autogreet: %v)", 
+	log.Printf("Saved macro '%s' with %d actions (duration: %v, idle: %v, autogreet: %v)",
 		macro.Name, len(macro.Actions), duration, isIdleBehavior, isAutoGreet)
 
 	// Clear recording
@@ -183,7 +183,7 @@ func (m *Manager) RecordAction(actionType string, data map[string]interface{}) {
 // PlayMacro executes a saved macro
 func (m *Manager) PlayMacro(name, requestedBy string) error {
 	m.mutex.Lock()
-	
+
 	if !m.IsOwner(requestedBy) && requestedBy != "AutoGreet" {
 		m.mutex.Unlock()
 		return fmt.Errorf("access denied: %s is not an owner", requestedBy)
@@ -217,7 +217,7 @@ func (m *Manager) PlayMacro(name, requestedBy string) error {
 		}()
 
 		log.Printf("Playing macro '%s' (%d actions)", name, len(macro.Actions))
-		
+
 		startTime := time.Now()
 		for i, action := range macro.Actions {
 			// Calculate delay based on original timing
@@ -421,7 +421,7 @@ func (m *Manager) PlayRandomIdleBehavior() error {
 
 	// Select random idle macro
 	selectedMacro := idleMacros[time.Now().UnixNano()%int64(len(idleMacros))]
-	
+
 	m.isPlaying = true
 	m.mutex.Unlock()
 
@@ -434,7 +434,7 @@ func (m *Manager) PlayRandomIdleBehavior() error {
 		}()
 
 		log.Printf("Playing idle behavior macro '%s' (%d actions)", selectedMacro.Name, len(selectedMacro.Actions))
-		
+
 		startTime := time.Now()
 		for i, action := range selectedMacro.Actions {
 			// Calculate delay based on original timing
@@ -460,7 +460,7 @@ func (m *Manager) PlayRandomIdleBehavior() error {
 // PlayAutoGreetMacro plays the specified auto-greet macro for a new avatar
 func (m *Manager) PlayAutoGreetMacro(macroName, avatarName string) error {
 	m.mutex.Lock()
-	
+
 	if m.isPlaying {
 		m.mutex.Unlock()
 		return fmt.Errorf("already playing a macro")
@@ -489,7 +489,7 @@ func (m *Manager) PlayAutoGreetMacro(macroName, avatarName string) error {
 		}()
 
 		log.Printf("Playing auto-greet macro '%s' for %s (%d actions)", macroName, avatarName, len(macro.Actions))
-		
+
 		startTime := time.Now()
 		for i, action := range macro.Actions {
 			// Calculate delay based on original timing
@@ -580,7 +580,7 @@ func (m *Manager) IsPlaying() bool {
 // saveMacro saves a macro to disk
 func (m *Manager) saveMacro(macro *types.Macro) error {
 	filename := filepath.Join(MacrosDir, macro.Name+MacroExt)
-	
+
 	data, err := json.MarshalIndent(macro, "", "  ")
 	if err != nil {
 		return err

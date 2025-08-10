@@ -22,13 +22,13 @@ import (
 
 // BuildInfo holds build-time information
 type BuildInfo struct {
-	Version     string
-	BuildTime   string
-	BuildUser   string
-	BuildHost   string
-	GitCommit   string
-	GoVersion   string
-	GoModules   map[string]string
+	Version   string
+	BuildTime string
+	BuildUser string
+	BuildHost string
+	GitCommit string
+	GoVersion string
+	GoModules map[string]string
 }
 
 // SystemInfo holds runtime system information
@@ -81,11 +81,11 @@ var (
 	GitCommit = "unknown"
 )
 
-func getVersion() string     { return Version }
-func getBuildTime() string   { return BuildTime }
-func getBuildUser() string   { return BuildUser }
-func getBuildHost() string   { return BuildHost }
-func getGitCommit() string   { return GitCommit }
+func getVersion() string   { return Version }
+func getBuildTime() string { return BuildTime }
+func getBuildUser() string { return BuildUser }
+func getBuildHost() string { return BuildHost }
+func getGitCommit() string { return GitCommit }
 
 // getGoModules returns information about Go modules (simplified version)
 func getGoModules() map[string]string {
@@ -105,16 +105,16 @@ func (w *Interface) Start(ctx context.Context) error {
 
 	// Setup routes
 	router := mux.NewRouter()
-	
+
 	// Static files
 	router.PathPrefix("/static/").Handler(http.StripPrefix("/static/", http.FileServer(http.Dir("web/static/"))))
-	
+
 	// Dashboard
 	router.HandleFunc("/", w.dashboardHandler).Methods("GET")
-	
+
 	// Corrade notification endpoint
 	router.HandleFunc("/corrade/notifications", w.corradeNotificationHandler).Methods("POST")
-	
+
 	// API endpoints
 	api := router.PathPrefix("/api").Subrouter()
 	api.HandleFunc("/status", w.statusHandler).Methods("GET")
@@ -126,13 +126,13 @@ func (w *Interface) Start(ctx context.Context) error {
 	api.HandleFunc("/stop-following", w.stopFollowingHandler).Methods("POST")
 	api.HandleFunc("/stand", w.standHandler).Methods("POST")
 	api.HandleFunc("/toggle-llama", w.toggleLlamaHandler).Methods("POST")
-	
+
 	// Avatar tracking API endpoints
 	api.HandleFunc("/avatars", w.getAvatarsHandler).Methods("GET")
 	api.HandleFunc("/autogreet", w.getAutoGreetHandler).Methods("GET")
 	api.HandleFunc("/autogreet", w.setAutoGreetHandler).Methods("POST")
 	api.HandleFunc("/autogreet", w.disableAutoGreetHandler).Methods("DELETE")
-	
+
 	// Macro API endpoints
 	macroAPI := api.PathPrefix("/macros").Subrouter()
 	macroAPI.HandleFunc("", w.getMacrosHandler).Methods("GET")
@@ -174,7 +174,7 @@ func (w *Interface) Stop(ctx context.Context) error {
 // corradeNotificationHandler handles notifications from Corrade
 func (w *Interface) corradeNotificationHandler(writer http.ResponseWriter, request *http.Request) {
 	var notification map[string]interface{}
-	
+
 	if err := json.NewDecoder(request.Body).Decode(&notification); err != nil {
 		log.Printf("Error decoding Corrade notification: %v", err)
 		http.Error(writer, "Bad Request", http.StatusBadRequest)
@@ -315,7 +315,7 @@ func (w *Interface) getSystemInfo() SystemInfo {
 // systemInfoHandler returns system information as JSON
 func (w *Interface) systemInfoHandler(writer http.ResponseWriter, request *http.Request) {
 	systemInfo := w.getSystemInfo()
-	
+
 	writer.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(writer).Encode(systemInfo)
 }
@@ -329,7 +329,7 @@ func (w *Interface) buildInfoHandler(writer http.ResponseWriter, request *http.R
 // statusHandler returns current bot status as JSON
 func (w *Interface) statusHandler(writer http.ResponseWriter, request *http.Request) {
 	status := w.corradeClient.UpdateStatusWithConfig(w.config)
-	
+
 	writer.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(writer).Encode(status)
 }
@@ -338,15 +338,15 @@ func (w *Interface) statusHandler(writer http.ResponseWriter, request *http.Requ
 func (w *Interface) logsHandler(writer http.ResponseWriter, request *http.Request) {
 	countStr := request.URL.Query().Get("count")
 	count := 50
-	
+
 	if countStr != "" {
 		if c, err := strconv.Atoi(countStr); err == nil && c > 0 {
 			count = c
 		}
 	}
-	
+
 	logs := w.chatProcessor.GetLogs(count)
-	
+
 	writer.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(writer).Encode(logs)
 }
@@ -354,7 +354,7 @@ func (w *Interface) logsHandler(writer http.ResponseWriter, request *http.Reques
 // getAvatarsHandler returns nearby avatars as JSON
 func (w *Interface) getAvatarsHandler(writer http.ResponseWriter, request *http.Request) {
 	avatars := w.chatProcessor.GetNearbyAvatars()
-	
+
 	writer.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(writer).Encode(avatars)
 }
@@ -362,12 +362,12 @@ func (w *Interface) getAvatarsHandler(writer http.ResponseWriter, request *http.
 // getAutoGreetHandler returns current auto-greet configuration
 func (w *Interface) getAutoGreetHandler(writer http.ResponseWriter, request *http.Request) {
 	enabled, macroName := w.chatProcessor.GetAutoGreetConfig()
-	
+
 	response := map[string]interface{}{
 		"enabled":   enabled,
 		"macroName": macroName,
 	}
-	
+
 	writer.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(writer).Encode(response)
 }
@@ -401,9 +401,9 @@ func (w *Interface) setAutoGreetHandler(writer http.ResponseWriter, request *htt
 	w.chatProcessor.SetAutoGreetConfig(req.Enabled, req.MacroName)
 
 	response := map[string]interface{}{
-		"status":  "success",
-		"message": "Auto-greet configuration updated",
-		"enabled": req.Enabled,
+		"status":    "success",
+		"message":   "Auto-greet configuration updated",
+		"enabled":   req.Enabled,
 		"macroName": req.MacroName,
 	}
 
@@ -453,7 +453,7 @@ func (w *Interface) teleportHandler(writer http.ResponseWriter, request *http.Re
 // getMacrosHandler returns all available macros
 func (w *Interface) getMacrosHandler(writer http.ResponseWriter, request *http.Request) {
 	macros := w.chatProcessor.GetMacroManager().GetMacros()
-	
+
 	writer.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(writer).Encode(macros)
 }
@@ -462,30 +462,30 @@ func (w *Interface) getMacrosHandler(writer http.ResponseWriter, request *http.R
 func (w *Interface) playMacroHandler(writer http.ResponseWriter, request *http.Request) {
 	vars := mux.Vars(request)
 	macroName := vars["name"]
-	
+
 	if macroName == "" {
 		http.Error(writer, "Macro name required", http.StatusBadRequest)
 		return
 	}
-	
+
 	// For web interface, use first owner as requestor
 	requestor := "WebInterface"
 	if len(w.config.Bot.Owners) > 0 {
 		requestor = w.config.Bot.Owners[0]
 	}
-	
+
 	err := w.chatProcessor.GetMacroManager().PlayMacro(macroName, requestor)
-	
+
 	response := map[string]string{
-		"status": "success",
+		"status":  "success",
 		"message": fmt.Sprintf("Playing macro '%s'", macroName),
 	}
-	
+
 	if err != nil {
 		response["status"] = "error"
 		response["message"] = err.Error()
 	}
-	
+
 	writer.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(writer).Encode(response)
 }
@@ -494,30 +494,30 @@ func (w *Interface) playMacroHandler(writer http.ResponseWriter, request *http.R
 func (w *Interface) deleteMacroHandler(writer http.ResponseWriter, request *http.Request) {
 	vars := mux.Vars(request)
 	macroName := vars["name"]
-	
+
 	if macroName == "" {
 		http.Error(writer, "Macro name required", http.StatusBadRequest)
 		return
 	}
-	
+
 	// For web interface, use first owner as requestor
 	requestor := "WebInterface"
 	if len(w.config.Bot.Owners) > 0 {
 		requestor = w.config.Bot.Owners[0]
 	}
-	
+
 	err := w.chatProcessor.GetMacroManager().DeleteMacro(macroName, requestor)
-	
+
 	response := map[string]string{
-		"status": "success",
+		"status":  "success",
 		"message": fmt.Sprintf("Deleted macro '%s'", macroName),
 	}
-	
+
 	if err != nil {
 		response["status"] = "error"
 		response["message"] = err.Error()
 	}
-	
+
 	writer.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(writer).Encode(response)
 }
@@ -525,12 +525,12 @@ func (w *Interface) deleteMacroHandler(writer http.ResponseWriter, request *http
 // getRecordingStatusHandler returns current recording status
 func (w *Interface) getRecordingStatusHandler(writer http.ResponseWriter, request *http.Request) {
 	status := w.chatProcessor.GetMacroManager().GetRecordingStatus()
-	
+
 	response := map[string]interface{}{
 		"isRecording": status != nil,
 		"status":      status,
 	}
-	
+
 	writer.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(writer).Encode(response)
 }
@@ -539,18 +539,18 @@ func (w *Interface) getRecordingStatusHandler(writer http.ResponseWriter, reques
 func (w *Interface) toggleLlamaHandler(writer http.ResponseWriter, request *http.Request) {
 	currentStatus := w.chatProcessor.IsLlamaEnabled()
 	w.chatProcessor.SetLlamaEnabled(!currentStatus)
-	
+
 	newStatus := "enabled"
 	if currentStatus {
 		newStatus = "disabled"
 	}
-	
+
 	response := map[string]interface{}{
 		"status":  "success",
 		"message": fmt.Sprintf("Llama chat %s", newStatus),
 		"enabled": !currentStatus,
 	}
-	
+
 	writer.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(writer).Encode(response)
 }
@@ -629,7 +629,7 @@ func (w *Interface) setIdleBehaviorHandler(writer http.ResponseWriter, request *
 	err := w.chatProcessor.GetMacroManager().SetIdleBehavior(macroName, requestor, true)
 
 	response := map[string]string{
-		"status": "success",
+		"status":  "success",
 		"message": fmt.Sprintf("Macro '%s' marked as idle behavior", macroName),
 	}
 
@@ -661,7 +661,7 @@ func (w *Interface) unsetIdleBehaviorHandler(writer http.ResponseWriter, request
 	err := w.chatProcessor.GetMacroManager().SetIdleBehavior(macroName, requestor, false)
 
 	response := map[string]string{
-		"status": "success",
+		"status":  "success",
 		"message": fmt.Sprintf("Macro '%s' no longer an idle behavior", macroName),
 	}
 
@@ -693,7 +693,7 @@ func (w *Interface) setAutoGreetMacroHandler(writer http.ResponseWriter, request
 	err := w.chatProcessor.GetMacroManager().SetAutoGreet(macroName, requestor, true)
 
 	response := map[string]string{
-		"status": "success",
+		"status":  "success",
 		"message": fmt.Sprintf("Macro '%s' marked as auto-greet macro", macroName),
 	}
 
@@ -725,7 +725,7 @@ func (w *Interface) unsetAutoGreetMacroHandler(writer http.ResponseWriter, reque
 	err := w.chatProcessor.GetMacroManager().SetAutoGreet(macroName, requestor, false)
 
 	response := map[string]string{
-		"status": "success",
+		"status":  "success",
 		"message": fmt.Sprintf("Macro '%s' no longer an auto-greet macro", macroName),
 	}
 
