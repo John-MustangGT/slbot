@@ -16,9 +16,10 @@ VERSION?=$(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
 BUILD_TIME=$(shell date -u +"%Y-%m-%dT%H:%M:%SZ")
 BUILD_USER=$(shell whoami)
 BUILD_HOST=$(shell hostname)
+GIT_COMMIT?=$(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown")
 
-# Go build flags
-LDFLAGS=-ldflags "-X main.Version=$(VERSION) -X main.BuildTime=$(BUILD_TIME) -X main.BuildUser=$(BUILD_USER) -X main.BuildHost=$(BUILD_HOST)"
+# Go build flags - Updated to use the web package path
+LDFLAGS=-ldflags "-X slbot/internal/web.Version=$(VERSION) -X slbot/internal/web.BuildTime=$(BUILD_TIME) -X slbot/internal/web.BuildUser=$(BUILD_USER) -X slbot/internal/web.BuildHost=$(BUILD_HOST) -X slbot/internal/web.GitCommit=$(GIT_COMMIT)"
 
 # Source files
 SOURCES=$(wildcard *.go) $(wildcard internal/*/*.go)
@@ -31,22 +32,22 @@ SOURCES=$(wildcard *.go) $(wildcard internal/*/*.go)
 build: $(BINARY_NAME)
 
 $(BINARY_NAME): $(SOURCES)
-	$(GOBUILD) $(LDFLAGS) -o $(BINARY_NAME) -v ./...
+	$(GOBUILD) $(LDFLAGS) -o $(BINARY_NAME) -v .
 
 ## Build for all platforms
 all: clean build build-linux build-windows build-darwin
 
 ## Build for Linux
 build-linux:
-	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 $(GOBUILD) $(LDFLAGS) -o $(BINARY_UNIX) -v ./...
+	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 $(GOBUILD) $(LDFLAGS) -o $(BINARY_UNIX) -v .
 
 ## Build for Windows
 build-windows:
-	CGO_ENABLED=0 GOOS=windows GOARCH=amd64 $(GOBUILD) $(LDFLAGS) -o $(BINARY_NAME).exe -v ./...
+	CGO_ENABLED=0 GOOS=windows GOARCH=amd64 $(GOBUILD) $(LDFLAGS) -o $(BINARY_NAME).exe -v .
 
 ## Build for macOS
 build-darwin:
-	CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 $(GOBUILD) $(LDFLAGS) -o $(BINARY_NAME)_darwin -v ./...
+	CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 $(GOBUILD) $(LDFLAGS) -o $(BINARY_NAME)_darwin -v .
 
 ## Run tests
 test:
