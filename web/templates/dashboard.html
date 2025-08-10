@@ -3,606 +3,625 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SL Bot Dashboard</title>
-    <link rel="stylesheet" href="/static/css/dashboard.css">
+    <title>SLBot Dashboard</title>
     <style>
-        /* Avatar tracking specific styles */
-        .avatar-controls {
-            display: flex;
-            flex-direction: column;
-            gap: 30px;
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
         }
-        
-        .auto-greet-section {
-            background: #f7fafc;
-            border: 1px solid #e2e8f0;
-            border-radius: 8px;
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            color: #333;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
             padding: 20px;
         }
-        
-        .auto-greet-config {
-            margin-top: 15px;
+
+        .header {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            padding: 30px;
+            margin-bottom: 30px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
         }
-        
-        .current-config {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            padding: 15px;
-            background: #e6fffa;
-            border: 1px solid #81e6d9;
-            border-radius: 6px;
-        }
-        
-        .config-form {
-            display: flex;
-            gap: 15px;
-            align-items: center;
-        }
-        
-        .config-form select {
-            flex: 1;
-            padding: 10px 12px;
-            border: 2px solid #e2e8f0;
-            border-radius: 6px;
-            font-size: 1rem;
-        }
-        
-        .nearby-avatars-section {
-            background: #f7fafc;
-            border: 1px solid #e2e8f0;
-            border-radius: 8px;
-            padding: 20px;
-        }
-        
-        .avatars-list {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
-            gap: 20px;
-            margin-top: 15px;
-        }
-        
-        .avatar-item {
-            background: white;
-            border: 2px solid #e2e8f0;
-            border-radius: 8px;
-            padding: 20px;
-            transition: transform 0.2s ease, box-shadow 0.2s ease;
-        }
-        
-        .avatar-item:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-        }
-        
-        .avatar-item.new {
-            border-color: #f6ad55;
-            background: #fffaf0;
-        }
-        
-        .avatar-item.greeted {
-            border-color: #68d391;
-            background: #f0fff4;
-        }
-        
-        .avatar-info h4 {
-            margin: 0 0 10px 0;
+
+        .header h1 {
+            font-size: 2.5rem;
+            font-weight: 700;
             color: #2d3748;
-            font-size: 1.2rem;
+            margin-bottom: 10px;
             display: flex;
             align-items: center;
-            gap: 10px;
+            gap: 15px;
         }
-        
-        .avatar-position {
-            color: #4a5568;
-            font-size: 0.9rem;
-            margin: 5px 0;
-            font-family: monospace;
+
+        .status-indicator {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: #48bb78;
+            box-shadow: 0 0 0 4px rgba(72, 187, 120, 0.2);
+            animation: pulse 2s infinite;
         }
-        
-        .avatar-times {
+
+        .status-indicator.offline {
+            background: #f56565;
+            box-shadow: 0 0 0 4px rgba(245, 101, 101, 0.2);
+        }
+
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.1); }
+            100% { transform: scale(1); }
+        }
+
+        .subtitle {
             color: #718096;
-            font-size: 0.85rem;
-            margin: 10px 0;
+            font-size: 1.1rem;
         }
-        
-        .avatar-actions {
-            margin-top: 15px;
+
+        /* Tab Navigation */
+        .tab-container {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+        }
+
+        .tab-nav {
             display: flex;
-            gap: 10px;
-            flex-wrap: wrap;
+            background: rgba(255, 255, 255, 0.1);
+            border-bottom: 1px solid rgba(0, 0, 0, 0.1);
         }
-        
-        .new-badge {
-            background: #ed8936;
-            color: white;
-            padding: 2px 8px;
-            border-radius: 12px;
-            font-size: 0.7rem;
-            font-weight: bold;
-        }
-        
-        .autogreet-badge {
-            background: #38a169;
-            color: white;
-            padding: 2px 8px;
-            border-radius: 12px;
-            font-size: 0.7rem;
-            font-weight: bold;
-            margin-left: 8px;
-        }
-        
-        .no-avatars {
-            text-align: center;
-            padding: 40px;
+
+        .tab-button {
+            flex: 1;
+            padding: 20px;
+            background: none;
+            border: none;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: 500;
             color: #718096;
-            font-style: italic;
+            transition: all 0.3s ease;
+            position: relative;
         }
-        
-        .btn-success {
-            background-color: #38a169;
-            color: white;
+
+        .tab-button:hover {
+            color: #4a5568;
+            background: rgba(255, 255, 255, 0.5);
         }
-        
-        .btn-success:hover {
-            background-color: #2f855a;
-            transform: translateY(-1px);
-            box-shadow: 0 4px 8px rgba(56, 161, 105, 0.3);
+
+        .tab-button.active {
+            color: #667eea;
+            background: rgba(255, 255, 255, 0.8);
         }
-        
-        /* Enhanced status grid for auto-greet status */
+
+        .tab-button.active::after {
+            content: '';
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            height: 3px;
+            background: linear-gradient(90deg, #667eea, #764ba2);
+        }
+
+        .tab-content {
+            padding: 30px;
+            min-height: 500px;
+        }
+
+        .tab-pane {
+            display: none;
+        }
+
+        .tab-pane.active {
+            display: block;
+            animation: fadeIn 0.3s ease-in-out;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* Status Cards */
         .status-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .status-card {
+            background: rgba(255, 255, 255, 0.9);
+            border-radius: 15px;
+            padding: 25px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+
+        .status-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 15px 40px rgba(0, 0, 0, 0.15);
+        }
+
+        .status-card h3 {
+            color: #2d3748;
+            font-size: 1.3rem;
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .status-value {
+            font-size: 2rem;
+            font-weight: 700;
+            color: #667eea;
+            margin-bottom: 5px;
+        }
+
+        .status-label {
+            color: #718096;
+            font-size: 0.9rem;
+        }
+
+        /* Logs */
+        .log-container {
+            background: #1a202c;
+            border-radius: 15px;
+            padding: 20px;
+            max-height: 400px;
+            overflow-y: auto;
+            font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+        }
+
+        .log-entry {
+            margin-bottom: 10px;
+            padding: 8px 12px;
+            border-radius: 6px;
+            background: rgba(255, 255, 255, 0.05);
+            border-left: 4px solid #667eea;
+        }
+
+        .log-timestamp {
+            color: #a0aec0;
+            font-size: 0.85rem;
+        }
+
+        .log-avatar {
+            color: #81e6d9;
+            font-weight: 600;
+        }
+
+        .log-message {
+            color: #e2e8f0;
+            margin-top: 4px;
+        }
+
+        .log-response {
+            color: #f6ad55;
+            margin-top: 4px;
+            font-style: italic;
+        }
+
+        /* System Info */
+        .system-info-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
             gap: 20px;
         }
-        
-        /* Responsive design for avatar tracking */
+
+        .info-card {
+            background: rgba(255, 255, 255, 0.9);
+            border-radius: 15px;
+            padding: 20px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+        }
+
+        .info-card h4 {
+            color: #2d3748;
+            margin-bottom: 15px;
+            font-size: 1.1rem;
+            border-bottom: 2px solid #e2e8f0;
+            padding-bottom: 8px;
+        }
+
+        .info-item {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 8px;
+            padding: 4px 0;
+        }
+
+        .info-label {
+            color: #718096;
+            font-weight: 500;
+        }
+
+        .info-value {
+            color: #2d3748;
+            font-weight: 600;
+        }
+
+        /* About Section */
+        .about-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+        }
+
+        .version-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-radius: 15px;
+            padding: 25px;
+            text-align: center;
+        }
+
+        .version-number {
+            font-size: 3rem;
+            font-weight: 700;
+            margin-bottom: 10px;
+        }
+
+        .version-label {
+            font-size: 1.1rem;
+            opacity: 0.9;
+        }
+
+        .build-info {
+            background: rgba(255, 255, 255, 0.9);
+            border-radius: 15px;
+            padding: 25px;
+        }
+
+        .build-info h4 {
+            color: #2d3748;
+            margin-bottom: 20px;
+            font-size: 1.3rem;
+        }
+
+        /* Responsive */
         @media (max-width: 768px) {
-            .avatar-controls {
-                gap: 20px;
+            .container {
+                padding: 15px;
             }
-            
-            .avatars-list {
+
+            .header h1 {
+                font-size: 2rem;
+            }
+
+            .tab-nav {
+                flex-wrap: wrap;
+            }
+
+            .tab-button {
+                min-width: 50%;
+                padding: 15px;
+            }
+
+            .status-grid {
                 grid-template-columns: 1fr;
-                gap: 15px;
-            }
-            
-            .config-form {
-                flex-direction: column;
-                align-items: stretch;
-            }
-            
-            .current-config {
-                flex-direction: column;
-                gap: 15px;
-                text-align: center;
-            }
-            
-            .avatar-actions {
-                justify-content: center;
             }
         }
+
+        /* Utility Classes */
+        .text-center { text-align: center; }
+        .text-green { color: #48bb78; }
+        .text-red { color: #f56565; }
+        .text-yellow { color: #ed8936; }
+        .text-blue { color: #4299e1; }
+        .mb-2 { margin-bottom: 0.5rem; }
+        .mb-4 { margin-bottom: 1rem; }
     </style>
 </head>
 <body>
     <div class="container">
-        <header>
-            <h1>Second Life Bot Dashboard</h1>
-            <div class="header-controls">
-                <button id="refreshBtn" class="btn btn-secondary">Refresh</button>
-                <div class="auto-refresh">
-                    <input type="checkbox" id="autoRefresh" checked>
-                    <label for="autoRefresh">Auto-refresh (5s)</label>
-                </div>
-            </div>
-        </header>
-        
-        <div class="card">
-            <h2>Bot Status</h2>
-            <div class="status-grid">
-                <div class="status-item">
-                    <div class="status-label">Status</div>
-                    <div class="status-value {{if .Status.IsOnline}}online{{else}}offline{{end}}">
-                        {{if .Status.IsOnline}}Online{{else}}Offline{{end}}
-                    </div>
-                </div>
-                <div class="status-item">
-                    <div class="status-label">Location</div>
-                    <div class="status-value">{{.Status.CurrentSim}}</div>
-                </div>
-                <div class="status-item">
-                    <div class="status-label">Position</div>
-                    <div class="status-value">{{printf "%.0f, %.0f, %.0f" .Status.Position.X .Status.Position.Y .Status.Position.Z}}</div>
-                </div>
-                <div class="status-item">
-                    <div class="status-label">Following</div>
-                    <div class="status-value">{{if .Status.IsFollowing}}{{.Status.FollowTarget}}{{else}}No{{end}}</div>
-                </div>
-                <div class="status-item">
-                    <div class="status-label">Sitting</div>
-                    <div class="status-value">{{if .Status.IsSitting}}{{.Status.SitObject}}{{else}}No{{end}}</div>
-                </div>
-                <div class="status-item">
-                    <div class="status-label">AI Chat</div>
-                    <div class="status-value {{if .LlamaEnabled}}online{{else}}offline{{end}}">
-                        {{if .LlamaEnabled}}Enabled{{else}}Disabled{{end}}
-                    </div>
-                </div>
-                <div class="status-item">
-                    <div class="status-label">Bot Status</div>
-                    <div class="status-value {{if .IsIdle}}idle{{else}}active{{end}}">
-                        {{if .IsIdle}}Idle{{else}}Active{{end}}
-                    </div>
-                </div>
-                <div class="status-item">
-                    <div class="status-label">Auto-Greet</div>
-                    <div class="status-value {{if .AutoGreetEnabled}}online{{else}}offline{{end}}">
-                        {{if .AutoGreetEnabled}}{{.AutoGreetMacro}}{{else}}Disabled{{end}}
-                    </div>
-                </div>
-                <div class="status-item">
-                    <div class="status-label">Last Update</div>
-                    <div class="status-value">{{.Status.LastUpdate.Format "15:04:05"}}</div>
-                </div>
-            </div>
+        <!-- Header -->
+        <div class="header">
+            <h1>
+                <div class="status-indicator {{if .Status.IsOnline}}online{{else}}offline{{end}}"></div>
+                SLBot Dashboard
+            </h1>
+            <p class="subtitle">
+                {{if .Status.IsOnline}}
+                    Connected to {{.Status.CurrentSim}} • Position: ({{printf "%.0f" .Status.Position.X}}, {{printf "%.0f" .Status.Position.Y}}, {{printf "%.0f" .Status.Position.Z}})
+                {{else}}
+                    Offline
+                {{end}}
+            </p>
         </div>
 
-        <div class="card">
-            <h2>Avatar Tracking</h2>
-            
-            <div class="avatar-controls">
-                <div class="auto-greet-section">
-                    <h3>Auto-Greet Configuration</h3>
-                    <div class="auto-greet-config">
-                        {{if .AutoGreetEnabled}}
-                        <div class="current-config">
-                            <p><strong>Currently enabled with macro:</strong> {{.AutoGreetMacro}}</p>
-                            <button id="disableAutoGreetBtn" class="btn btn-warning">Disable Auto-Greet</button>
-                        </div>
-                        {{else}}
-                        <div class="config-form">
-                            <select id="autoGreetMacroSelect" class="form-control">
-                                <option value="">Select a macro for auto-greet...</option>
-                                {{range $name, $macro := .Macros}}
-                                <option value="{{$name}}">{{$name}} {{if $macro.AutoGreet}}(Auto-Greet){{end}}</option>
-                                {{end}}
-                            </select>
-                            <button id="enableAutoGreetBtn" class="btn btn-primary">Enable Auto-Greet</button>
-                        </div>
-                        {{end}}
-                    </div>
-                </div>
+        <!-- Tab Container -->
+        <div class="tab-container">
+            <!-- Tab Navigation -->
+            <div class="tab-nav">
+                <button class="tab-button active" onclick="switchTab('overview')">Overview</button>
+                <button class="tab-button" onclick="switchTab('logs')">Logs</button>
+                <button class="tab-button" onclick="switchTab('system')">System Status</button>
+                <button class="tab-button" onclick="switchTab('about')">About</button>
+            </div>
 
-                {{if gt (len .NearbyAvatars) 0}}
-                <div class="nearby-avatars-section">
-                    <h3>Nearby Avatars ({{len .NearbyAvatars}})</h3>
-                    <div class="avatars-list">
+            <!-- Tab Content -->
+            <div class="tab-content">
+                <!-- Overview Tab -->
+                <div id="overview" class="tab-pane active">
+                    <div class="status-grid">
+                        <!-- Bot Status -->
+                        <div class="status-card">
+                            <h3>🤖 Bot Status</h3>
+                            <div class="status-value {{if .Status.IsOnline}}text-green{{else}}text-red{{end}}">
+                                {{if .Status.IsOnline}}Online{{else}}Offline{{end}}
+                            </div>
+                            <div class="status-label">Current Status</div>
+                        </div>
+
+                        <!-- AI Status -->
+                        <div class="status-card">
+                            <h3>🧠 AI Engine</h3>
+                            <div class="status-value {{if .LlamaEnabled}}text-green{{else}}text-yellow{{end}}">
+                                {{if .LlamaEnabled}}Enabled{{else}}Disabled{{end}}
+                            </div>
+                            <div class="status-label">Llama AI Status</div>
+                        </div>
+
+                        <!-- Following Status -->
+                        <div class="status-card">
+                            <h3>🚶 Following</h3>
+                            <div class="status-value {{if .Status.IsFollowing}}text-blue{{else}}text-gray{{end}}">
+                                {{if .Status.IsFollowing}}{{.Status.FollowTarget}}{{else}}None{{end}}
+                            </div>
+                            <div class="status-label">Current Target</div>
+                        </div>
+
+                        <!-- Nearby Avatars -->
+                        <div class="status-card">
+                            <h3>👥 Nearby Avatars</h3>
+                            <div class="status-value text-blue">{{len .NearbyAvatars}}</div>
+                            <div class="status-label">In Region</div>
+                        </div>
+
+                        <!-- Macros -->
+                        <div class="status-card">
+                            <h3>⚙️ Macros</h3>
+                            <div class="status-value text-blue">{{len .Macros}}</div>
+                            <div class="status-label">Available Macros</div>
+                        </div>
+
+                        <!-- Idle Status -->
+                        <div class="status-card">
+                            <h3>😴 Idle Mode</h3>
+                            <div class="status-value {{if .IsIdle}}text-yellow{{else}}text-green{{end}}">
+                                {{if .IsIdle}}Idle{{else}}Active{{end}}
+                            </div>
+                            <div class="status-label">Bot Activity</div>
+                        </div>
+                    </div>
+
+                    {{if .NearbyAvatars}}
+                    <div class="status-card">
+                        <h3>👥 Nearby Avatars</h3>
                         {{range $name, $avatar := .NearbyAvatars}}
-                        <div class="avatar-item {{if $avatar.IsGreeted}}greeted{{else}}new{{end}}">
-                            <div class="avatar-info">
-                                <h4>{{$name}} {{if not $avatar.IsGreeted}}<span class="new-badge">NEW</span>{{end}}</h4>
-                                <p class="avatar-position">Position: {{printf "%.0f, %.0f, %.0f" $avatar.Position.X $avatar.Position.Y $avatar.Position.Z}}</p>
-                                <p class="avatar-times">
-                                    First seen: {{$avatar.FirstSeen.Format "15:04:05"}}<br>
-                                    Last seen: {{$avatar.LastSeen.Format "15:04:05"}}
-                                </p>
-                            </div>
-                            <div class="avatar-actions">
-                                {{if not $avatar.IsGreeted}}
-                                <button class="btn btn-sm btn-primary" onclick="greetAvatar('{{$name}}')">Greet Now</button>
-                                {{end}}
-                                <button class="btn btn-sm btn-secondary" onclick="teleportToAvatar('{{$name}}', {{$avatar.Position.X}}, {{$avatar.Position.Y}}, {{$avatar.Position.Z}})">Teleport To</button>
-                            </div>
+                        <div class="info-item">
+                            <span class="info-label">{{$name}}</span>
+                            <span class="info-value">
+                                {{if $avatar.IsGreeted}}✅ Greeted{{else}}👋 New{{end}}
+                            </span>
+                        </div>
+                        {{end}}
+                    </div>
+                    {{end}}
+                </div>
+
+                <!-- Logs Tab -->
+                <div id="logs" class="tab-pane">
+                    <h2 class="mb-4">Recent Activity Logs</h2>
+                    <div class="log-container">
+                        {{range .Logs}}
+                        <div class="log-entry">
+                            <div class="log-timestamp">{{.Timestamp.Format "15:04:05"}}</div>
+                            {{if .Avatar}}<div class="log-avatar">{{.Avatar}}:</div>{{end}}
+                            <div class="log-message">{{.Message}}</div>
+                            {{if .Response}}<div class="log-response">Bot: {{.Response}}</div>{{end}}
                         </div>
                         {{end}}
                     </div>
                 </div>
-                {{else}}
-                <div class="no-avatars">
-                    <p>No other avatars currently in the region.</p>
-                </div>
-                {{end}}
-            </div>
-        </div>
 
-        <div class="card">
-            <h2>Macro System</h2>
-            
-            {{if .IsRecording}}
-            <div class="recording-status">
-                <h3 class="recording-indicator">🔴 Recording: {{.RecordingStatus.Name}}</h3>
-                <p>Started by {{.RecordingStatus.RecordedBy}} at {{.RecordingStatus.StartTime.Format "15:04:05"}}</p>
-                <p>Actions recorded: {{len .RecordingStatus.Actions}}</p>
-            </div>
-            {{end}}
-            
-            {{if gt (len .Macros) 0}}
-            <div class="idle-config-info">
-                <p><strong>Idle Behavior Settings:</strong> 
-                   Active after {{.Status.IdleBehaviorMinInterval}} minutes idle, 
-                   random intervals of {{.Status.IdleBehaviorMinInterval}}-{{.Status.IdleBehaviorMaxInterval}} minutes between behaviors</p>
-            </div>
-            {{end}}
-            
-            <div class="macro-controls">
-                {{if .Macros}}
-                <div class="macro-list">
-                    <h3>Available Macros</h3>
-                    <div class="macro-grid">
-                        {{range $name, $macro := .Macros}}
-                        <div class="macro-item">
-                            <h4>{{$name}} 
-                                {{if $macro.IdleBehavior}}<span class="idle-badge">IDLE</span>{{end}}
-                                {{if $macro.AutoGreet}}<span class="autogreet-badge">AUTO-GREET</span>{{end}}
-                            </h4>
-                            <p class="macro-description">{{if $macro.Description}}{{$macro.Description}}{{else}}No description{{end}}</p>
-                            <p class="macro-info">{{len $macro.Actions}} actions • {{formatDuration $macro.Duration}} • by {{$macro.CreatedBy}}</p>
-                            {{if $macro.Tags}}<p class="macro-tags">Tags: {{range $i, $tag := $macro.Tags}}{{if $i}}, {{end}}{{$tag}}{{end}}</p>{{end}}
-                            <div class="macro-actions">
-                                <button class="btn btn-primary btn-sm" onclick="playMacro('{{$name}}')">Play</button>
-                                {{if $macro.IdleBehavior}}
-                                <button class="btn btn-secondary btn-sm" onclick="unsetIdleBehavior('{{$name}}')">Remove Idle</button>
-                                {{else}}
-                                <button class="btn btn-info btn-sm" onclick="setIdleBehavior('{{$name}}')">Set Idle</button>
-                                {{end}}
-                                {{if $macro.AutoGreet}}
-                                <button class="btn btn-secondary btn-sm" onclick="unsetAutoGreetMacro('{{$name}}')">Remove Auto-Greet</button>
-                                {{else}}
-                                <button class="btn btn-success btn-sm" onclick="setAutoGreetMacro('{{$name}}')">Set Auto-Greet</button>
-                                {{end}}
-                                <button class="btn btn-warning btn-sm" onclick="deleteMacro('{{$name}}')">Delete</button>
+                <!-- System Status Tab -->
+                <div id="system" class="tab-pane">
+                    <h2 class="mb-4">System Information</h2>
+                    <div class="system-info-grid">
+                        <!-- Runtime Info -->
+                        <div class="info-card">
+                            <h4>🖥️ Runtime Information</h4>
+                            <div class="info-item">
+                                <span class="info-label">Go Version</span>
+                                <span class="info-value">{{.SystemInfo.GoVersion}}</span>
+                            </div>
+                            <div class="info-item">
+                                <span class="info-label">CPU Cores</span>
+                                <span class="info-value">{{.SystemInfo.NumCPU}}</span>
+                            </div>
+                            <div class="info-item">
+                                <span class="info-label">Goroutines</span>
+                                <span class="info-value">{{.SystemInfo.NumGoroutine}}</span>
+                            </div>
+                            <div class="info-item">
+                                <span class="info-label">OS/Arch</span>
+                                <span class="info-value">{{.SystemInfo.OS}}/{{.SystemInfo.Arch}}</span>
+                            </div>
+                            <div class="info-item">
+                                <span class="info-label">Uptime</span>
+                                <span class="info-value">{{formatUptime .SystemInfo.Uptime}}</span>
                             </div>
                         </div>
-                        {{end}}
+
+                        <!-- Memory Usage -->
+                        <div class="info-card">
+                            <h4>💾 Memory Usage</h4>
+                            <div class="info-item">
+                                <span class="info-label">Allocated</span>
+                                <span class="info-value">{{formatBytes .SystemInfo.MemStats.Alloc}}</span>
+                            </div>
+                            <div class="info-item">
+                                <span class="info-label">Total Allocated</span>
+                                <span class="info-value">{{formatBytes .SystemInfo.MemStats.TotalAlloc}}</span>
+                            </div>
+                            <div class="info-item">
+                                <span class="info-label">System Memory</span>
+                                <span class="info-value">{{formatBytes .SystemInfo.MemStats.Sys}}</span>
+                            </div>
+                            <div class="info-item">
+                                <span class="info-label">GC Cycles</span>
+                                <span class="info-value">{{.SystemInfo.MemStats.NumGC}}</span>
+                            </div>
+                        </div>
+
+                        <!-- Bot Configuration -->
+                        <div class="info-card">
+                            <h4>⚙️ Configuration</h4>
+                            <div class="info-item">
+                                <span class="info-label">Auto-Greet</span>
+                                <span class="info-value {{if .AutoGreetEnabled}}text-green{{else}}text-red{{end}}">
+                                    {{if .AutoGreetEnabled}}Enabled ({{.AutoGreetMacro}}){{else}}Disabled{{end}}
+                                </span>
+                            </div>
+                            <div class="info-item">
+                                <span class="info-label">Idle Timeout</span>
+                                <span class="info-value">{{.Status.IdleBehaviorMinInterval}}-{{.Status.IdleBehaviorMaxInterval}} min</span>
+                            </div>
+                            <div class="info-item">
+                                <span class="info-label">Recording</span>
+                                <span class="info-value {{if .IsRecording}}text-yellow{{else}}text-green{{end}}">
+                                    {{if .IsRecording}}Active{{else}}Inactive{{end}}
+                                </span>
+                            </div>
+                        </div>
                     </div>
                 </div>
-                {{else}}
-                <div class="idle-info">
-                    <p>No macros available. Owners can create macros by saying "record macro [name]" in chat.</p>
-                    <div class="help-text">
-                        <h4>Avatar Tracking Commands:</h4>
-                        <ul>
-                            <li><code>list avatars</code> - Show nearby avatars</li>
-                            <li><code>set autogreet [macro name]</code> - Enable auto-greet with specific macro</li>
-                            <li><code>disable autogreet</code> - Disable auto-greet</li>
-                            <li><code>autogreet status</code> - Show current auto-greet status</li>
-                            <li><code>set autogreet macro [name]</code> - Mark macro as auto-greet type</li>
-                            <li><code>list autogreet</code> - List all auto-greet macros</li>
-                        </ul>
-                        
-                        <h4>Macro Recording Commands:</h4>
-                        <ul>
-                            <li><code>stop recording autogreet</code> - Mark recorded macro as auto-greet</li>
-                            <li><code>stop recording idle autogreet</code> - Mark as both idle and auto-greet</li>
-                        </ul>
-                        
-                        <p>Use <code>{avatar}</code> in auto-greet macros to substitute the avatar's name in messages.</p>
+
+                <!-- About Tab -->
+                <div id="about" class="tab-pane">
+                    <h2 class="mb-4">About SLBot</h2>
+                    <div class="about-grid">
+                        <!-- Version Info -->
+                        <div class="version-card">
+                            <div class="version-number">{{.BuildInfo.Version}}</div>
+                            <div class="version-label">SLBot Version</div>
+                        </div>
+
+                        <!-- Build Information -->
+                        <div class="build-info">
+                            <h4>🔨 Build Information</h4>
+                            <div class="info-item">
+                                <span class="info-label">Version</span>
+                                <span class="info-value">{{.BuildInfo.Version}}</span>
+                            </div>
+                            <div class="info-item">
+                                <span class="info-label">Build Time</span>
+                                <span class="info-value">{{.BuildInfo.BuildTime}}</span>
+                            </div>
+                            <div class="info-item">
+                                <span class="info-label">Built By</span>
+                                <span class="info-value">{{.BuildInfo.BuildUser}}@{{.BuildInfo.BuildHost}}</span>
+                            </div>
+                            <div class="info-item">
+                                <span class="info-label">Git Commit</span>
+                                <span class="info-value">{{.BuildInfo.GitCommit}}</span>
+                            </div>
+                            <div class="info-item">
+                                <span class="info-label">Go Version</span>
+                                <span class="info-value">{{.BuildInfo.GoVersion}}</span>
+                            </div>
+                        </div>
+
+                        <!-- Dependencies -->
+                        <div class="build-info">
+                            <h4>📦 Dependencies</h4>
+                            {{range $module, $version := .BuildInfo.GoModules}}
+                            <div class="info-item">
+                                <span class="info-label">{{$module}}</span>
+                                <span class="info-value">{{$version}}</span>
+                            </div>
+                            {{end}}
+                        </div>
+
+                        <!-- Features -->
+                        <div class="build-info">
+                            <h4>✨ Features</h4>
+                            <div class="info-item">
+                                <span class="info-label">AI Chat Integration</span>
+                                <span class="info-value text-green">✅ Available</span>
+                            </div>
+                            <div class="info-item">
+                                <span class="info-label">Macro System</span>
+                                <span class="info-value text-green">✅ Available</span>
+                            </div>
+                            <div class="info-item">
+                                <span class="info-label">Auto-Greet</span>
+                                <span class="info-value text-green">✅ Available</span>
+                            </div>
+                            <div class="info-item">
+                                <span class="info-label">Idle Behaviors</span>
+                                <span class="info-value text-green">✅ Available</span>
+                            </div>
+                            <div class="info-item">
+                                <span class="info-label">Avatar Tracking</span>
+                                <span class="info-value text-green">✅ Available</span>
+                            </div>
+                            <div class="info-item">
+                                <span class="info-label">Web Dashboard</span>
+                                <span class="info-value text-green">✅ Available</span>
+                            </div>
+                        </div>
                     </div>
                 </div>
-                {{end}}
-            </div>
-        </div>
-
-        <div class="card">
-            <h2>Movement Controls</h2>
-            <div class="controls-grid">
-                <div class="control-section">
-                    <h3>Teleport</h3>
-                    <form id="teleportForm" class="control-form">
-                        <div class="form-group">
-                            <label for="tpRegion">Region:</label>
-                            <input type="text" id="tpRegion" name="region" placeholder="Region name" required>
-                        </div>
-                        <div class="form-row">
-                            <div class="form-group">
-                                <label for="tpX">X:</label>
-                                <input type="number" id="tpX" name="x" placeholder="128" value="128" required>
-                            </div>
-                            <div class="form-group">
-                                <label for="tpY">Y:</label>
-                                <input type="number" id="tpY" name="y" placeholder="128" value="128" required>
-                            </div>
-                            <div class="form-group">
-                                <label for="tpZ">Z:</label>
-                                <input type="number" id="tpZ" name="z" placeholder="22" value="22" required>
-                            </div>
-                        </div>
-                        <button type="submit" class="btn btn-primary">Teleport</button>
-                    </form>
-                </div>
-                
-                <div class="control-section">
-                    <h3>Walk To</h3>
-                    <form id="walkForm" class="control-form">
-                        <div class="form-row">
-                            <div class="form-group">
-                                <label for="walkX">X:</label>
-                                <input type="number" id="walkX" name="x" placeholder="X coordinate" required>
-                            </div>
-                            <div class="form-group">
-                                <label for="walkY">Y:</label>
-                                <input type="number" id="walkY" name="y" placeholder="Y coordinate" required>
-                            </div>
-                            <div class="form-group">
-                                <label for="walkZ">Z:</label>
-                                <input type="number" id="walkZ" name="z" placeholder="Z coordinate" required>
-                            </div>
-                        </div>
-                        <button type="submit" class="btn btn-primary">Walk To</button>
-                    </form>
-                </div>
-            </div>
-            
-            <div class="quick-actions">
-                <button id="stopFollowBtn" class="btn btn-warning">Stop Following</button>
-                <button id="standUpBtn" class="btn btn-warning">Stand Up</button>
-                <button id="toggleLlamaBtn" class="btn {{if .LlamaEnabled}}btn-warning{{else}}btn-primary{{end}}">
-                    {{if .LlamaEnabled}}Disable AI{{else}}Enable AI{{end}}
-                </button>
-            </div>
-        </div>
-
-        <div class="card">
-            <h2>Recent Activity</h2>
-            <div class="logs-container" id="logsContainer">
-                {{range .Logs}}
-                <div class="log-entry log-{{.Type}}">
-                    <div class="log-timestamp">{{.Timestamp.Format "15:04:05"}}</div>
-                    <div class="log-content">
-                        <strong>{{.Avatar}}:</strong> {{.Message}}
-                        {{if .Response}}<br><em class="bot-response">Bot: {{.Response}}</em>{{end}}
-                    </div>
-                </div>
-                {{end}}
             </div>
         </div>
     </div>
 
-    <!-- Status Messages -->
-    <div id="statusMessages" class="status-messages"></div>
-
-    <script src="/static/js/dashboard.js"></script>
     <script>
-        // Avatar tracking specific functions
-        function greetAvatar(avatarName) {
-            // Get current auto-greet macro
-            const autoGreetMacro = '{{.AutoGreetMacro}}';
-            if (!autoGreetMacro) {
-                dashboard.showMessage('No auto-greet macro configured', 'error');
-                return;
-            }
+        function switchTab(tabName) {
+            // Hide all tab panes
+            const panes = document.querySelectorAll('.tab-pane');
+            panes.forEach(pane => pane.classList.remove('active'));
             
-            // Play the auto-greet macro for this avatar
-            fetch(`/api/macros/play/${encodeURIComponent(autoGreetMacro)}`, {
-                method: 'POST'
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.status === 'success') {
-                    dashboard.showMessage(`Greeting ${avatarName} with macro '${autoGreetMacro}'`, 'success');
-                } else {
-                    dashboard.showMessage(data.message || 'Failed to play greeting macro', 'error');
-                }
-            })
-            .catch(error => {
-                dashboard.showMessage('Failed to greet avatar', 'error');
-            });
-        }
-        
-        function teleportToAvatar(avatarName, x, y, z) {
-            const teleportData = {
-                region: '{{.Status.CurrentSim}}',
-                x: x,
-                y: y,
-                z: z + 2 // Teleport slightly above the avatar
-            };
+            // Remove active class from all buttons
+            const buttons = document.querySelectorAll('.tab-button');
+            buttons.forEach(button => button.classList.remove('active'));
             
-            fetch('/api/teleport', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify(teleportData)
-            })
-            .then(response => response.json())
-            .then(data => {
-                dashboard.showMessage(`Teleporting near ${avatarName}`, data.status === 'success' ? 'success' : 'error');
-            })
-            .catch(error => {
-                dashboard.showMessage('Failed to teleport to avatar', 'error');
-            });
+            // Show selected tab pane
+            document.getElementById(tabName).classList.add('active');
+            
+            // Add active class to clicked button
+            event.target.classList.add('active');
         }
-        
-        function setAutoGreetMacro(macroName) {
-            fetch(`/api/macros/autogreet/${encodeURIComponent(macroName)}`, {
-                method: 'POST'
-            })
-            .then(response => response.json())
-            .then(data => {
-                dashboard.showMessage(data.message, data.status === 'success' ? 'success' : 'error');
-                if (data.status === 'success') {
-                    setTimeout(() => window.location.reload(), 1000);
-                }
-            })
-            .catch(error => {
-                dashboard.showMessage('Failed to set auto-greet macro', 'error');
-            });
+
+        // Auto-refresh functionality
+        function refreshData() {
+            // You could add AJAX calls here to refresh data without page reload
+            console.log('Refreshing data...');
         }
-        
-        function unsetAutoGreetMacro(macroName) {
-            fetch(`/api/macros/autogreet/${encodeURIComponent(macroName)}`, {
-                method: 'DELETE'
-            })
-            .then(response => response.json())
-            .then(data => {
-                dashboard.showMessage(data.message, data.status === 'success' ? 'success' : 'error');
-                if (data.status === 'success') {
-                    setTimeout(() => window.location.reload(), 1000);
-                }
-            })
-            .catch(error => {
-                dashboard.showMessage('Failed to unset auto-greet macro', 'error');
-            });
-        }
-        
-        // Auto-greet configuration functions
+
+        // Refresh every 30 seconds
+        setInterval(refreshData, 30000);
+
+        // Initial load
         document.addEventListener('DOMContentLoaded', function() {
-            const enableAutoGreetBtn = document.getElementById('enableAutoGreetBtn');
-            const disableAutoGreetBtn = document.getElementById('disableAutoGreetBtn');
-            const autoGreetMacroSelect = document.getElementById('autoGreetMacroSelect');
-            
-            if (enableAutoGreetBtn) {
-                enableAutoGreetBtn.addEventListener('click', function() {
-                    const selectedMacro = autoGreetMacroSelect.value;
-                    if (!selectedMacro) {
-                        dashboard.showMessage('Please select a macro first', 'error');
-                        return;
-                    }
-                    
-                    const requestData = {
-                        enabled: true,
-                        macroName: selectedMacro
-                    };
-                    
-                    fetch('/api/autogreet', {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                        },
-                        body: JSON.stringify(requestData)
-                    })
-                    .then(response => response.json())
-                    .then(data => {
-                        dashboard.showMessage(data.message, data.status === 'success' ? 'success' : 'error');
-                        if (data.status === 'success') {
-                            setTimeout(() => window.location.reload(), 1000);
-                        }
-                    })
-                    .catch(error => {
-                        dashboard.showMessage('Failed to enable auto-greet', 'error');
-                    });
-                });
-            }
-            
-            if (disableAutoGreetBtn) {
-                disableAutoGreetBtn.addEventListener('click', function() {
-                    fetch('/api/autogreet', {
-                        method: 'DELETE'
-                    })
-                    .then(response => response.json())
-                    .then(data => {
-                        dashboard.showMessage(data.message, data.status === 'success' ? 'success' : 'error');
-                        if (data.status === 'success') {
-                            setTimeout(() => window.location.reload(), 1000);
-                        }
-                    })
-                    .catch(error => {
-                        dashboard.showMessage('Failed to disable auto-greet', 'error');
-                    });
-                });
-            }
+            console.log('SLBot Dashboard loaded');
         });
     </script>
 </body>

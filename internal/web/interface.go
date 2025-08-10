@@ -8,6 +8,7 @@ import (
 	"log"
 	"net/http"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"time"
 
@@ -19,6 +20,28 @@ import (
 	"slbot/internal/types"
 )
 
+// BuildInfo holds build-time information
+type BuildInfo struct {
+	Version     string
+	BuildTime   string
+	BuildUser   string
+	BuildHost   string
+	GitCommit   string
+	GoVersion   string
+	GoModules   map[string]string
+}
+
+// SystemInfo holds runtime system information
+type SystemInfo struct {
+	GoVersion    string
+	NumCPU       int
+	NumGoroutine int
+	MemStats     runtime.MemStats
+	Uptime       time.Duration
+	OS           string
+	Arch         string
+}
+
 // Interface handles the web dashboard
 type Interface struct {
 	config        *config.Config
@@ -26,6 +49,8 @@ type Interface struct {
 	chatProcessor *chat.Processor
 	server        *http.Server
 	templates     *template.Template
+	buildInfo     BuildInfo
+	startTime     time.Time
 }
 
 // NewInterface creates a new web interface
@@ -34,6 +59,40 @@ func NewInterface(cfg *config.Config, corradeClient *corrade.Client, chatProcess
 		config:        cfg,
 		corradeClient: corradeClient,
 		chatProcessor: chatProcessor,
+		startTime:     time.Now(),
+		buildInfo: BuildInfo{
+			Version:   getVersion(),
+			BuildTime: getBuildTime(),
+			BuildUser: getBuildUser(),
+			BuildHost: getBuildHost(),
+			GitCommit: getGitCommit(),
+			GoVersion: runtime.Version(),
+			GoModules: getGoModules(),
+		},
+	}
+}
+
+// Build-time variables (set via ldflags)
+var (
+	Version   = "dev"
+	BuildTime = "unknown"
+	BuildUser = "unknown"
+	BuildHost = "unknown"
+	GitCommit = "unknown"
+)
+
+func getVersion() string     { return Version }
+func getBuildTime() string   { return BuildTime }
+func getBuildUser() string   { return BuildUser }
+func getBuildHost() string   { return BuildHost }
+func getGitCommit() string   { return GitCommit }
+
+// getGoModules returns information about Go modules (simplified version)
+func getGoModules() map[string]string {
+	// In a real implementation, you might parse go.mod or use build info
+	return map[string]string{
+		"github.com/gorilla/mux": "v1.8.0",
+		// Add other modules as needed
 	}
 }
 
@@ -59,6 +118,8 @@ func (w *Interface) Start(ctx context.Context) error {
 	// API endpoints
 	api := router.PathPrefix("/api").Subrouter()
 	api.HandleFunc("/status", w.statusHandler).Methods("GET")
+	api.HandleFunc("/system", w.systemInfoHandler).Methods("GET")
+	api.HandleFunc("/build", w.buildInfoHandler).Methods("GET")
 	api.HandleFunc("/logs", w.logsHandler).Methods("GET")
 	api.HandleFunc("/teleport", w.teleportHandler).Methods("POST")
 	api.HandleFunc("/walk", w.walkHandler).Methods("POST")
@@ -115,7 +176,6 @@ func (w *Interface) corradeNotificationHandler(writer http.ResponseWriter, reque
 	var notification map[string]interface{}
 	
 	if err := json.NewDecoder(request.Body).Decode(&notification); err != nil {
-		log.Printf("DEBUG: %q", notification)
 		log.Printf("Error decoding Corrade notification: %v", err)
 		http.Error(writer, "Bad Request", http.StatusBadRequest)
 		return
@@ -133,9 +193,6 @@ func (w *Interface) corradeNotificationHandler(writer http.ResponseWriter, reque
 func (w *Interface) loadTemplates() error {
 	templatePath := filepath.Join("web", "templates", "*.html")
 	templates, err := template.New("").Funcs(template.FuncMap{
-		"since": func(t time.Time) time.Duration {
-        		return time.Since(t)
-    		},
 		"add": func(a, b int) int {
 			return a + b
 		},
@@ -143,10 +200,31 @@ func (w *Interface) loadTemplates() error {
 			if d < time.Minute {
 				return fmt.Sprintf("%.0fs", d.Seconds())
 			}
-			if d < time.Hour {
-            			return fmt.Sprintf("%.0fm", d.Minutes())
-        		}
 			return fmt.Sprintf("%.0fm", d.Minutes())
+		},
+		"formatBytes": func(bytes uint64) string {
+			const unit = 1024
+			if bytes < unit {
+				return fmt.Sprintf("%d B", bytes)
+			}
+			div, exp := int64(unit), 0
+			for n := bytes / unit; n >= unit; n /= unit {
+				div *= unit
+				exp++
+			}
+			return fmt.Sprintf("%.1f %cB", float64(bytes)/float64(div), "KMGTPE"[exp])
+		},
+		"formatUptime": func(d time.Duration) string {
+			days := int(d.Hours()) / 24
+			hours := int(d.Hours()) % 24
+			minutes := int(d.Minutes()) % 60
+			if days > 0 {
+				return fmt.Sprintf("%dd %dh %dm", days, hours, minutes)
+			}
+			if hours > 0 {
+				return fmt.Sprintf("%dh %dm", hours, minutes)
+			}
+			return fmt.Sprintf("%dm", minutes)
 		},
 	}).ParseGlob(templatePath)
 	if err != nil {
@@ -182,7 +260,7 @@ func (w *Interface) dashboardHandler(writer http.ResponseWriter, request *http.R
 	isIdle := w.chatProcessor.IsIdle()
 	nearbyAvatars := w.chatProcessor.GetNearbyAvatars()
 	autoGreetEnabled, autoGreetMacro := w.chatProcessor.GetAutoGreetConfig()
-	pendingSit := (*types.PendingSitConfirmation)(nil)
+	systemInfo := w.getSystemInfo()
 
 	data := struct {
 		Status           types.BotStatus
@@ -192,10 +270,11 @@ func (w *Interface) dashboardHandler(writer http.ResponseWriter, request *http.R
 		IsRecording      bool
 		RecordingStatus  *types.MacroRecording
 		IsIdle           bool
-		PendingSit       *types.PendingSitConfirmation
 		NearbyAvatars    map[string]*types.AvatarInfo
 		AutoGreetEnabled bool
 		AutoGreetMacro   string
+		BuildInfo        BuildInfo
+		SystemInfo       SystemInfo
 	}{
 		Status:           status,
 		Logs:             logs,
@@ -204,16 +283,47 @@ func (w *Interface) dashboardHandler(writer http.ResponseWriter, request *http.R
 		IsRecording:      recordingStatus != nil,
 		RecordingStatus:  recordingStatus,
 		IsIdle:           isIdle,
-		PendingSit:       pendingSit,
 		NearbyAvatars:    nearbyAvatars,
 		AutoGreetEnabled: autoGreetEnabled,
 		AutoGreetMacro:   autoGreetMacro,
+		BuildInfo:        w.buildInfo,
+		SystemInfo:       systemInfo,
 	}
 
 	if err := w.templates.ExecuteTemplate(writer, "dashboard.html", data); err != nil {
 		log.Printf("Template error: %v", err)
 		http.Error(writer, "Internal server error", http.StatusInternalServerError)
 	}
+}
+
+// getSystemInfo returns current system information
+func (w *Interface) getSystemInfo() SystemInfo {
+	var memStats runtime.MemStats
+	runtime.ReadMemStats(&memStats)
+
+	return SystemInfo{
+		GoVersion:    runtime.Version(),
+		NumCPU:       runtime.NumCPU(),
+		NumGoroutine: runtime.NumGoroutine(),
+		MemStats:     memStats,
+		Uptime:       time.Since(w.startTime),
+		OS:           runtime.GOOS,
+		Arch:         runtime.GOARCH,
+	}
+}
+
+// systemInfoHandler returns system information as JSON
+func (w *Interface) systemInfoHandler(writer http.ResponseWriter, request *http.Request) {
+	systemInfo := w.getSystemInfo()
+	
+	writer.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(writer).Encode(systemInfo)
+}
+
+// buildInfoHandler returns build information as JSON
+func (w *Interface) buildInfoHandler(writer http.ResponseWriter, request *http.Request) {
+	writer.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(writer).Encode(w.buildInfo)
 }
 
 // statusHandler returns current bot status as JSON
