@@ -175,6 +175,8 @@ func (w *Interface) Stop(ctx context.Context) error {
 func (w *Interface) corradeNotificationHandler(writer http.ResponseWriter, request *http.Request) {
 	var notification map[string]interface{}
 
+   printHTTPRequest(request)
+
 	if err := json.NewDecoder(request.Body).Decode(&notification); err != nil {
 		log.Printf("Error decoding Corrade notification: %v", err)
 		http.Error(writer, "Bad Request", http.StatusBadRequest)
