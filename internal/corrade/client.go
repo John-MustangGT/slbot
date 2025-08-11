@@ -18,12 +18,16 @@ import (
 
 // Client handles all Corrade communication
 type Client struct {
-	config       config.CorradeConfig
-	httpClient   *http.Client
-	status       types.BotStatus
-	botName      string // Store the bot's own name for position queries
-	botUUID      string // Store the bot's UUID
-	avatarsMutex sync.RWMutex
+	config           config.CorradeConfig
+	httpClient       *http.Client
+	status           types.BotStatus
+	botName          string // Store the bot's own name for position queries
+	botUUID          string // Store the bot's UUID
+	avatarsMutex     sync.RWMutex
+	pendingRequests  map[string]chan types.Position // For async position requests
+	requestsMutex    sync.RWMutex
+	uuidNameMap      map[string]string // UUID to name mapping
+	nameMapMutex     sync.RWMutex
 }
 
 // NewClient creates a new Corrade client
@@ -36,7 +40,8 @@ func NewClient(cfg config.CorradeConfig) *Client {
 			LastUpdate:    time.Now(),
 			NearbyAvatars: make(map[string]*types.AvatarInfo),
 		},
-		botName: "", // Will be set when we have bot config
+		botName:         "", // Will be set when we have bot config
+		pendingRequests: make(map[string]chan types.Position),
 	}
 }
 
@@ -95,6 +100,91 @@ func (c *Client) SetupNotification(eventType, callbackURL string) error {
 
 	log.Printf("Setup notification for %s to %s", eventType, callbackURL)
 	return nil
+}
+
+// RequestAvatarData requests avatar data for all avatars in the region
+// This will trigger callbacks with avatar information
+func (c *Client) RequestAvatarData(region string, callbackURL string) error {
+	params := map[string]string{
+		"region": region,
+		"callback": callbackURL,
+	}
+	_, err := c.sendCommand("getavatardata", params)
+	return err
+}
+
+// ProcessAvatarDataCallback processes the callback from getavatardata
+func (c *Client) ProcessAvatarDataCallback(data map[string]interface{}) {
+	c.avatarsMutex.Lock()
+	defer c.avatarsMutex.Unlock()
+
+	// Extract avatar information from callback data
+	// This is a simplified version - you'll need to adjust based on actual callback format
+	if firstName, ok := data["FirstName"].(string); ok {
+		lastName := ""
+		if ln, exists := data["LastName"].(string); exists {
+			lastName = ln
+		}
+		
+		name := firstName
+		if lastName != "" && lastName != "Resident" {
+			name += " " + lastName
+		}
+
+		// Skip if this is the bot itself
+		if firstName == strings.Split(c.botName, " ")[0] {
+			return
+		}
+
+		currentTime := time.Now()
+		
+		// Extract position if available
+		var pos types.Position
+		if posData, exists := data["GlobalPosition"].(string); exists {
+			// Parse position string format like "<x, y, z>"
+			re := regexp.MustCompile(`<(\d+(?:\.\d+)?),\s*(\d+(?:\.\d+)?),\s*(\d+(?:\.\d+)?)>`)
+			matches := re.FindStringSubmatch(posData)
+			if len(matches) >= 4 {
+				fmt.Sscanf(matches[1], "%f", &pos.X)
+				fmt.Sscanf(matches[2], "%f", &pos.Y)
+				fmt.Sscanf(matches[3], "%f", &pos.Z)
+			}
+		}
+
+		uuid := ""
+		if u, exists := data["UUID"].(string); exists {
+			uuid = u
+		}
+
+		if existingAvatar, exists := c.status.NearbyAvatars[name]; exists {
+			// Update existing avatar
+			existingAvatar.Position = pos
+			existingAvatar.LastSeen = currentTime
+			existingAvatar.UUID = uuid
+		} else {
+			// New avatar
+			c.status.NearbyAvatars[name] = &types.AvatarInfo{
+				Name:      name,
+				UUID:      uuid,
+				Position:  pos,
+				FirstSeen: currentTime,
+				LastSeen:  currentTime,
+				IsGreeted: false,
+			}
+			log.Printf("New avatar detected: %s at position (%.2f, %.2f, %.2f)", name, pos.X, pos.Y, pos.Z)
+		}
+
+		// Check if there's a pending request for this avatar
+		c.requestsMutex.Lock()
+		if ch, exists := c.pendingRequests[name]; exists {
+			select {
+			case ch <- pos:
+			default:
+			}
+			delete(c.pendingRequests, name)
+		}
+		c.requestsMutex.Unlock()
+	}
 }
 
 // Tell makes the bot speak using the tell command (replaces Say)
@@ -166,38 +256,60 @@ func (c *Client) StandUp() error {
 	return err
 }
 
-// GetAvatarPosition gets an avatar's current position
+// GetAvatarPosition gets an avatar's current position from cached data
+// If not in cache, returns last known position or zero position
 func (c *Client) GetAvatarPosition(avatar string) (types.Position, error) {
-	params := map[string]string{
-		"firstname": strings.Split(avatar, " ")[0],
+	c.avatarsMutex.RLock()
+	defer c.avatarsMutex.RUnlock()
+
+	if avatarInfo, exists := c.status.NearbyAvatars[avatar]; exists {
+		return avatarInfo.Position, nil
 	}
 
-	// Add lastname if available
-	parts := strings.Split(avatar, " ")
-	if len(parts) > 1 {
-		params["lastname"] = parts[1]
+	return types.Position{}, fmt.Errorf("avatar %s not found in cached data", avatar)
+}
+
+// GetAvatarPositionAsync requests an avatar's position asynchronously
+// Returns a channel that will receive the position when available
+func (c *Client) GetAvatarPositionAsync(avatar string, timeout time.Duration) (<-chan types.Position, error) {
+	c.requestsMutex.Lock()
+	defer c.requestsMutex.Unlock()
+
+	// Check if already in cache
+	c.avatarsMutex.RLock()
+	if avatarInfo, exists := c.status.NearbyAvatars[avatar]; exists {
+		c.avatarsMutex.RUnlock()
+		ch := make(chan types.Position, 1)
+		ch <- avatarInfo.Position
+		close(ch)
+		return ch, nil
+	}
+	c.avatarsMutex.RUnlock()
+
+	// Create channel for async response
+	ch := make(chan types.Position, 1)
+	c.pendingRequests[avatar] = ch
+
+	// Request avatar data for current region
+	region := c.GetCurrentRegion()
+	if region == "Unknown" {
+		delete(c.pendingRequests, avatar)
+		return nil, fmt.Errorf("cannot determine current region")
 	}
 
-	response, err := c.sendCommand("getavatardata", params)
-	if err != nil {
-		return types.Position{}, err
-	}
-
-   log.Printf("getavatardata: %s", response)
-
-	// Parse position from response
-	pos := types.Position{}
-	if strings.Contains(response, "Position") || strings.Contains(response, "GlobalPosition") {
-		re := regexp.MustCompile(`(?:Position|GlobalPosition).*?(\d+(?:\.\d+)?).*?(\d+(?:\.\d+)?).*?(\d+(?:\.\d+)?)`)
-		matches := re.FindStringSubmatch(response)
-		if len(matches) >= 4 {
-			fmt.Sscanf(matches[1], "%f", &pos.X)
-			fmt.Sscanf(matches[2], "%f", &pos.Y)
-			fmt.Sscanf(matches[3], "%f", &pos.Z)
+	// This would need a callback URL setup
+	// For now, we'll just trigger a region scan
+	go func() {
+		time.Sleep(timeout)
+		c.requestsMutex.Lock()
+		if ch, exists := c.pendingRequests[avatar]; exists {
+			close(ch)
+			delete(c.pendingRequests, avatar)
 		}
-	}
+		c.requestsMutex.Unlock()
+	}()
 
-	return pos, nil
+	return ch, nil
 }
 
 // GetOwnPosition gets the bot's current position using getavatardata
@@ -207,6 +319,9 @@ func (c *Client) GetOwnPosition() types.Position {
 		return types.Position{}
 	}
 
+	// For the bot's own position, we can try to get it from the status or make a direct call
+	// This might still need to be handled via callback for true async behavior
+	
 	// Split bot name into first and last name
 	parts := strings.Split(c.botName, " ")
 	params := map[string]string{
@@ -239,95 +354,6 @@ func (c *Client) GetOwnPosition() types.Position {
 	return pos
 }
 
-// GetNearbyAvatars gets avatars in the current region
-func (c *Client) GetNearbyAvatars() (map[string]*types.AvatarInfo, error) {
-	response, err := c.sendCommand("getmapavatarpositions", nil)
-	if err != nil {
-		return nil, err
-	}
-
-	c.avatarsMutex.Lock()
-	defer c.avatarsMutex.Unlock()
-
-	currentTime := time.Now()
-	currentAvatars := make(map[string]string) // name -> uuid mapping for this scan
-
-	// Parse avatar data from response
-	// This regex should be adjusted based on the actual response format from Corrade
-	avatarRegex := regexp.MustCompile(`FirstName.*?([^,\s]+).*?LastName.*?([^,\s]*).*?GlobalPosition.*?<(\d+(?:\.\d+)?),\s*(\d+(?:\.\d+)?),\s*(\d+(?:\.\d+)?)>.*?UUID.*?([a-fA-F0-9-]+)`)
-	matches := avatarRegex.FindAllStringSubmatch(response, -1)
-
-	for _, match := range matches {
-		if len(match) >= 7 {
-			firstName := strings.Trim(match[1], `"`)
-			lastName := strings.Trim(match[2], `"`)
-			uuid := match[6]
-
-			// Skip if this is the bot itself
-			if firstName == strings.Split(c.botName, " ")[0] {
-				continue
-			}
-
-			var x, y, z float64
-			fmt.Sscanf(match[3], "%f", &x)
-			fmt.Sscanf(match[4], "%f", &y)
-			fmt.Sscanf(match[5], "%f", &z)
-
-			name := firstName
-			if lastName != "" && lastName != "Resident" {
-				name += " " + lastName
-			}
-
-			currentAvatars[name] = uuid
-
-			pos := types.Position{X: x, Y: y, Z: z}
-
-			if existingAvatar, exists := c.status.NearbyAvatars[name]; exists {
-				// Update existing avatar
-				existingAvatar.Position = pos
-				existingAvatar.LastSeen = currentTime
-				existingAvatar.UUID = uuid
-			} else {
-				// New avatar
-				c.status.NearbyAvatars[name] = &types.AvatarInfo{
-					Name:      name,
-					UUID:      uuid,
-					Position:  pos,
-					FirstSeen: currentTime,
-					LastSeen:  currentTime,
-					IsGreeted: false,
-				}
-				log.Printf("New avatar detected: %s", name)
-			}
-		}
-	}
-
-	// Remove avatars that are no longer in the region (not seen for 2 minutes)
-	for name, avatar := range c.status.NearbyAvatars {
-		if _, stillPresent := currentAvatars[name]; !stillPresent {
-			if time.Since(avatar.LastSeen) > 2*time.Minute {
-				delete(c.status.NearbyAvatars, name)
-				log.Printf("Avatar left region: %s", name)
-			}
-		}
-	}
-
-	// Return a copy of the current avatars
-	result := make(map[string]*types.AvatarInfo)
-	for name, avatar := range c.status.NearbyAvatars {
-		result[name] = &types.AvatarInfo{
-			Name:      avatar.Name,
-			UUID:      avatar.UUID,
-			Position:  avatar.Position,
-			FirstSeen: avatar.FirstSeen,
-			LastSeen:  avatar.LastSeen,
-			IsGreeted: avatar.IsGreeted,
-		}
-	}
-
-	return result, nil
-}
-
 // GetNewAvatars returns avatars that haven't been greeted yet
 func (c *Client) GetNewAvatars() []*types.AvatarInfo {
 	c.avatarsMutex.RLock()
@@ -355,14 +381,14 @@ func (c *Client) MarkAvatarGreeted(name string) {
 
 // GetCurrentRegion gets the current region/sim name
 func (c *Client) GetCurrentRegion() string {
-	params := map[string]string{
-		"data":   "Name",
+   params := map[string]string{
+      "data":   "Name", 
    }  
-	response, err := c.sendCommand("getregiondata", params)
-	if err != nil {
-		return "Unknown"
-	}
-
+   response, err := c.sendCommand("getregiondata", params) 
+   if err != nil {
+      return "Unknown"
+   }
+   
    answers, err := url.ParseQuery(response)
    if err != nil {
       return "Unknown"
@@ -373,7 +399,7 @@ func (c *Client) GetCurrentRegion() string {
          return data[1]
       }
    }
-	return "Unknown"
+   return "Unknown"
 }
 
 // UpdateStatus updates the bot's current status
