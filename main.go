@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"os"
 	"os/signal"
@@ -29,6 +30,9 @@ func main() {
 	// Initialize Corrade client
 	corradeClient := corrade.NewClient(cfg.Corrade)
 
+	// Set bot name for position tracking and avatar filtering
+	corradeClient.SetBotName(cfg.Bot.Name)
+
 	// Initialize chat processor
 	chatProcessor := chat.NewProcessor(cfg, corradeClient)
 
@@ -50,7 +54,7 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	// Start web interface
+	// Start web interface (this will also start avatar tracking)
 	go func() {
 		if err := webInterface.Start(ctx); err != nil {
 			log.Printf("Web interface error: %v", err)
@@ -63,6 +67,19 @@ func main() {
 			log.Printf("Chat processor error: %v", err)
 		}
 	}()
+
+	// Setup Corrade notifications for chat events
+	callbackURL := fmt.Sprintf("http://localhost:%d/corrade/notifications", cfg.Bot.WebPort)
+	
+	// Setup chat notifications
+	if err := corradeClient.SetupNotification("chat", callbackURL); err != nil {
+		log.Printf("Failed to setup chat notification: %v", err)
+	}
+	
+	// Setup instant message notifications
+	if err := corradeClient.SetupNotification("instantmessage", callbackURL); err != nil {
+		log.Printf("Failed to setup IM notification: %v", err)
+	}
 
 	// Announce bot is online
 	if err := corradeClient.Tell(cfg.Prompts.WelcomeMessage); err != nil {
