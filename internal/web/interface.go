@@ -156,6 +156,9 @@ func (w *Interface) Start(ctx context.Context) error {
 	// Start periodic status updates
 	go w.statusUpdateRoutine(ctx)
 
+	// Start periodic avatar tracking (NEW)
+	go w.avatarTrackingRoutine(ctx)
+
 	// Start server
 	if err := w.server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 		return err
@@ -172,11 +175,37 @@ func (w *Interface) Stop(ctx context.Context) error {
 	return nil
 }
 
-// corradeNotificationHandler handles notifications from Corrade
+// avatarTrackingRoutine periodically requests nearby avatars (NEW)
+func (w *Interface) avatarTrackingRoutine(ctx context.Context) {
+	// Initial delay to let everything start up
+	time.Sleep(5 * time.Second)
+	
+	// Request avatar tracking every 30 seconds
+	ticker := time.NewTicker(30 * time.Second)
+	defer ticker.Stop()
+
+	// Do an immediate request
+	if err := w.corradeClient.RequestNearbyAvatars(w.callbackURL); err != nil {
+		log.Printf("Initial avatar tracking request failed: %v", err)
+	} else {
+		log.Printf("Started avatar tracking with callback URL: %s", w.callbackURL)
+	}
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			if err := w.corradeClient.RequestNearbyAvatars(w.callbackURL); err != nil {
+				log.Printf("Avatar tracking request failed: %v", err)
+			}
+		}
+	}
+}
+
+// corradeNotificationHandler handles notifications from Corrade (UPDATED)
 func (w *Interface) corradeNotificationHandler(writer http.ResponseWriter, request *http.Request) {
 	var notification map[string]interface{}
-
-	// printHTTPRequest(request)
 
 	// Check content type to handle both JSON and form-encoded data
 	contentType := request.Header.Get("Content-Type")
@@ -219,12 +248,73 @@ func (w *Interface) corradeNotificationHandler(writer http.ResponseWriter, reque
 		return
 	}
 
-	// Process the notification through the chat processor
-	w.chatProcessor.ProcessNotification(notification)
+	// Route callbacks based on command type (NEW LOGIC)
+	if command, ok := notification["command"].(string); ok {
+		switch command {
+		case "getmapavatarpositions":
+			log.Printf("Received getmapavatarpositions callback")
+			w.corradeClient.ProcessMapAvatarPositionsCallback(notification)
+		case "getavatardata":
+			log.Printf("Received getavatardata callback")
+			w.corradeClient.ProcessAvatarDataCallback(notification)
+		default:
+			// Handle other notifications through chat processor (chat, IM, etc.)
+			w.chatProcessor.ProcessNotification(notification)
+		}
+	} else {
+		// If no command specified, try to determine from other fields
+		if _, hasData := notification["data"]; hasData {
+			// Likely an avatar positions callback
+			log.Printf("Received callback with data field (likely avatar positions)")
+			w.corradeClient.ProcessMapAvatarPositionsCallback(notification)
+		} else {
+			// Default to chat processor
+			w.chatProcessor.ProcessNotification(notification)
+		}
+	}
+
+	// Extract avatar names from chat notifications for name mapping (NEW)
+	if msgType, ok := notification["type"].(string); ok && (msgType == "chat" || msgType == "instantmessage") {
+		if firstName, hasFirst := notification["firstname"].(string); hasFirst {
+			if uuid, hasUUID := notification["agent"].(string); hasUUID {
+				lastName := ""
+				if ln, hasLast := notification["lastname"].(string); hasLast && ln != "Resident" {
+					lastName = ln
+				}
+				
+				fullName := firstName
+				if lastName != "" {
+					fullName += " " + lastName
+				}
+				
+				// Update the name mapping in Corrade client
+				w.corradeClient.UpdateAvatarName(uuid, fullName)
+				log.Printf("Updated name mapping: %s -> %s", uuid, fullName)
+			}
+		}
+	}
 
 	// Respond with success
 	writer.WriteHeader(http.StatusOK)
 	writer.Write([]byte("OK"))
+}
+
+// refreshAvatarsHandler manually triggers avatar refresh (NEW)
+func (w *Interface) refreshAvatarsHandler(writer http.ResponseWriter, request *http.Request) {
+	err := w.corradeClient.RequestNearbyAvatars(w.callbackURL)
+
+	response := map[string]string{
+		"status":  "success",
+		"message": "Avatar refresh requested",
+	}
+
+	if err != nil {
+		response["status"] = "error"
+		response["message"] = "Failed to refresh avatars: " + err.Error()
+	}
+
+	writer.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(writer).Encode(response)
 }
 
 // loadTemplates loads HTML templates
