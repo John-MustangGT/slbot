@@ -52,15 +52,20 @@ type Interface struct {
 	templates     *template.Template
 	buildInfo     BuildInfo
 	startTime     time.Time
+	callbackURL   string // ADD THIS LINE
 }
 
-// NewInterface creates a new web interface
+// Updated NewInterface function
 func NewInterface(cfg *config.Config, corradeClient *corrade.Client, chatProcessor *chat.Processor) *Interface {
+	// Construct callback URL based on web port
+	callbackURL := fmt.Sprintf("http://localhost:%d/corrade/notifications", cfg.Bot.WebPort)
+	
 	return &Interface{
 		config:        cfg,
 		corradeClient: corradeClient,
 		chatProcessor: chatProcessor,
 		startTime:     time.Now(),
+		callbackURL:   callbackURL, // ADD THIS LINE
 		buildInfo: BuildInfo{
 			Version:   getVersion(),
 			BuildTime: getBuildTime(),
