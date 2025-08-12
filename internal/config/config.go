@@ -32,6 +32,7 @@ type LlamaConfig struct {
 // BotConfig holds bot-specific settings
 type BotConfig struct {
 	Name                    string   `xml:"name"`
+	UUID                    string   `xml:"uuid"`
 	MaxMessageLen           int      `xml:"maxMessageLen"`
 	PollInterval            int      `xml:"pollInterval"`
 	ResponseTimeout         int      `xml:"responseTimeout"`

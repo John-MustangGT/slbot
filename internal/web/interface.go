@@ -52,7 +52,7 @@ type Interface struct {
 	templates     *template.Template
 	buildInfo     BuildInfo
 	startTime     time.Time
-	callbackURL   string // ADD THIS LINE
+	callbackURL   string 
 }
 
 // Updated NewInterface function
@@ -65,7 +65,7 @@ func NewInterface(cfg *config.Config, corradeClient *corrade.Client, chatProcess
 		corradeClient: corradeClient,
 		chatProcessor: chatProcessor,
 		startTime:     time.Now(),
-		callbackURL:   callbackURL, // ADD THIS LINE
+		callbackURL:   callbackURL,
 		buildInfo: BuildInfo{
 			Version:   getVersion(),
 			BuildTime: getBuildTime(),
@@ -212,6 +212,8 @@ func (w *Interface) avatarTrackingRoutine(ctx context.Context) {
 func (w *Interface) corradeNotificationHandler(writer http.ResponseWriter, request *http.Request) {
 	var notification map[string]interface{}
 
+   //printHTTPRequest(request)
+
 	// Check content type to handle both JSON and form-encoded data
 	contentType := request.Header.Get("Content-Type")
 	
@@ -259,6 +261,9 @@ func (w *Interface) corradeNotificationHandler(writer http.ResponseWriter, reque
 		case "getmapavatarpositions":
 			log.Printf("Received getmapavatarpositions callback")
 			w.corradeClient.ProcessMapAvatarPositionsCallback(notification)
+		case "getavatarpositions":
+			log.Printf("Received getavatarpositions callback")
+			w.corradeClient.ProcessGetAvatarPositionsCallback(notification)
 		case "getavatardata":
 			log.Printf("Received getavatardata callback")
 			w.corradeClient.ProcessAvatarDataCallback(notification)

@@ -71,9 +71,13 @@ func (c *Client) sendCommand(command string, params map[string]string) (string, 
 	values.Set("group", c.config.Group)
 	values.Set("password", c.config.Password)
 
+   //log.Printf("Command=%s params=%q", command, params)
+
 	for key, value := range params {
 		values.Set(key, value)
 	}
+
+   //log.Printf("Request= %s\n", formatURLValues(values))
 
 	resp, err := c.httpClient.PostForm(c.config.URL, values)
 	if err != nil {
@@ -113,10 +117,11 @@ func (c *Client) SetupNotification(eventType, callbackURL string) error {
 // This will trigger callbacks with avatar information
 func (c *Client) RequestAvatarData(region string, callbackURL string) error {
 	params := map[string]string{
+      "entity":   "parcel",
 		"region":   region,
 		"callback": callbackURL,
 	}
-	_, err := c.sendCommand("getavatardata", params)
+	_, err := c.sendCommand("getavatarpositions", params)
 	return err
 }
 
@@ -509,16 +514,18 @@ func (c *Client) RequestNearbyAvatars(callbackURL string) error {
 	// Send async command with region parameter and callback URL
 	params := map[string]string{
 		"region":   region,
+      "entity":  "region",
 		"callback": callbackURL,
 	}
-	
+
 	log.Printf("Requesting nearby avatars for region: %s with callback: %s", region, callbackURL)
-	_, err := c.sendCommand("getmapavatarpositions", params)
+	_, err := c.sendCommand("getavatarpositions", params)
 	return err
 }
 
 // ProcessMapAvatarPositionsCallback processes the callback from getmapavatarpositions (ENHANCED)
 func (c *Client) ProcessMapAvatarPositionsCallback(data map[string]interface{}) {
+   log.Printf("Map AvatarPositions.data: %q\n", data)
 	c.avatarsMutex.Lock()
 	defer c.avatarsMutex.Unlock()
 
