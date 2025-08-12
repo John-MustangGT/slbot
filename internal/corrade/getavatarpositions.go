@@ -46,7 +46,7 @@ func (c *Client) ProcessGetAvatarPositionsCallback(data map[string]interface{}) 
 
    for i:=0; i<len(parts); i+=3 {
       thisAvatar := &types.AvatarInfo{
-         Name:      parts[i],
+         Name:      normalizeName(parts[i]),
          UUID:      parts[i+1],
          Position:  parsePositionString(strings.Trim(parts[i+2], "\"")),
          FirstSeen: currentTime,
@@ -55,7 +55,10 @@ func (c *Client) ProcessGetAvatarPositionsCallback(data map[string]interface{}) 
       }
 
       // Skip if this is the bot itself
-      if thisAvatar.UUID == c.botUUID {
+      if thisAvatar.UUID == c.botUUID || matchName(thisAvatar.Name, c.botName) {
+         c.SetBotUUID(thisAvatar.UUID)
+         c.status.Position = thisAvatar.Position
+         c.status.LastUpdate = currentTime
          continue
       }
 
@@ -93,8 +96,8 @@ func (c *Client) cleanupAvatars() {
    // Remove avatars that are no longer in the region (not seen for 2 minutes)
    for name, avatar := range c.status.NearbyAvatars {
       if time.Since(avatar.LastSeen) > 2*time.Minute {
+         log.Printf("Avatar left region: %s last: %s", name, avatar.LastSeen.String())
          delete(c.status.NearbyAvatars, name)
-         log.Printf("Avatar left region: %s", name)
       }
    }
 }

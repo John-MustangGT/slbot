@@ -514,7 +514,7 @@ func (c *Client) RequestNearbyAvatars(callbackURL string) error {
 	// Send async command with region parameter and callback URL
 	params := map[string]string{
 		"region":   region,
-      "entity":  "region",
+      "entity":  "parcel",
 		"callback": callbackURL,
 	}
 

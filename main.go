@@ -13,6 +13,7 @@ import (
 	"slbot/internal/config"
 	"slbot/internal/corrade"
 	"slbot/internal/web"
+//   "slbot/internal/persistant"
 )
 
 func main() {
