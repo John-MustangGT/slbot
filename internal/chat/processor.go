@@ -867,12 +867,17 @@ func (p *Processor) buildPrompt(template, userMessage string) string {
 
 // SystemLog adds log entry
 func (p *Processor) SystemLog(format string, v ...any) {
-   log.Printf(format, v)
    ent := types.LogEntry{
 	   Timestamp: time.Now(),
 	   Type:      "system",
 	   Avatar:    p.config.Bot.Name, 
-	   Message: fmt.Sprintf(format, v),
+   }
+   if len(v) > 0 {
+      log.Printf(format, v)
+      ent.Message = fmt.Sprintf(format, v)
+   } else {
+      log.Printf(format)
+      ent.Message = fmt.Sprintf(format)
    }
    p.addLog(ent)
 }

@@ -87,6 +87,8 @@ func main() {
 		log.Printf("Failed to announce online status: %v", err)
 	}
 
+   chatProcessor.SystemLog("Bot online")
+
 	// Wait for shutdown signal
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
