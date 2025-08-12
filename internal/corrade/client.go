@@ -331,44 +331,7 @@ func (c *Client) GetAvatarPositionAsync(avatar string, timeout time.Duration) (<
 
 // GetOwnPosition gets the bot's current position using getavatardata
 func (c *Client) GetOwnPosition() types.Position {
-	if c.botName == "" {
-		log.Printf("Bot name not set, cannot get own position")
-		return types.Position{}
-	}
-
-	// For the bot's own position, we can try to get it from the status or make a direct call
-	// This might still need to be handled via callback for true async behavior
-	
-	// Split bot name into first and last name
-	parts := strings.Split(c.botName, " ")
-	params := map[string]string{
-		"firstname": parts[0],
-	}
-
-	// Add lastname if available
-	if len(parts) > 1 {
-		params["lastname"] = parts[1]
-	}
-
-	response, err := c.sendCommand("getavatardata", params)
-	if err != nil {
-		log.Printf("Error getting own avatar data: %v", err)
-		return types.Position{}
-	}
-
-	pos := types.Position{}
-	// Try to parse position from response
-	if strings.Contains(response, "Position") || strings.Contains(response, "GlobalPosition") {
-		re := regexp.MustCompile(`(?:Position|GlobalPosition).*?(\d+(?:\.\d+)?).*?(\d+(?:\.\d+)?).*?(\d+(?:\.\d+)?)`)
-		matches := re.FindStringSubmatch(response)
-		if len(matches) >= 4 {
-			fmt.Sscanf(matches[1], "%f", &pos.X)
-			fmt.Sscanf(matches[2], "%f", &pos.Y)
-			fmt.Sscanf(matches[3], "%f", &pos.Z)
-		}
-	}
-
-	return pos
+   return c.status.Position
 }
 
 // GetNewAvatars returns avatars that haven't been greeted yet
