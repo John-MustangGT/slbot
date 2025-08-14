@@ -231,8 +231,13 @@ func (p *Processor) processChat(message types.ChatMessage) {
 	// Update last interaction time
 	p.lastInteractionTime = time.Now()
 
+   cleanMessage := strings.ToLower(message.Message)
+	cleanMessage = strings.TrimSpace(cleanMessage)
+   chatName := strings.ToLower(p.config.Bot.ChatName)
+
 	// Check if bot is mentioned or being directly addressed
-	if !strings.Contains(strings.ToLower(message.Message), strings.ToLower(p.config.Bot.ChatName)) && message.Type != "message" &&
+	if !strings.HasPrefix(cleanMessage, chatName) && 
+      message.Type != "message" &&
 		!strings.HasPrefix(message.Message, "/") {
 		return
 	}
@@ -253,16 +258,16 @@ func (p *Processor) processChat(message types.ChatMessage) {
 	}
 
 	// Clean the message for processing
-	cleanMessage := strings.ReplaceAll(message.Message, p.config.Bot.Name, "")
+	cleanMessage = strings.ReplaceAll(cleanMessage, chatName, "")
 	cleanMessage = strings.TrimSpace(cleanMessage)
 
 	// Determine context based on message content
 	context := "general"
-	if strings.Contains(strings.ToLower(cleanMessage), "hello") ||
-		strings.Contains(strings.ToLower(cleanMessage), "hi") ||
-		strings.Contains(strings.ToLower(cleanMessage), "hey") {
+	if strings.Contains(cleanMessage, "hello") ||
+		strings.Contains(cleanMessage, "hi") ||
+		strings.Contains(cleanMessage, "hey") {
 		context = "greeting"
-	} else if strings.Contains(strings.ToLower(cleanMessage), "help") {
+	} else if strings.Contains(cleanMessage, "help") {
 		context = "help"
 	}
 
@@ -275,7 +280,7 @@ func (p *Processor) processChat(message types.ChatMessage) {
 		if err != nil {
 			log.Printf("Error getting Llama response: %v", err)
 			// Fall back to predefined responses if Llama fails
-//			response = p.getFallbackResponse(context, cleanMessage)
+			response = p.getFallbackResponse(context, cleanMessage)
 		}
 	} else {
 		response = p.getFallbackResponse(context, cleanMessage)
@@ -287,11 +292,17 @@ func (p *Processor) processChat(message types.ChatMessage) {
 	}
 
 	// Send response back to Second Life
-	if err := p.corradeClient.Tell(response); err != nil {
-		log.Printf("Error sending response to SL: %v", err)
-	}
+   if message.Type == "local" {
+   	if err := p.corradeClient.Tell(response); err != nil {
+   		log.Printf("Error sending response to SL: %v", err)
+   	}
+   } else {
+   	if err := p.corradeClient.Whisper(message.Avatar, response); err != nil {
+   		log.Printf("Error sending response to SL: %v", err)
+   	}
+   }
 
-	log.Printf("Chat - %s: %s | Bot: %s", message.Avatar, message.Message, response)
+	log.Printf("%s - %s: %s | Bot: %s", message.Type, message.Avatar, message.Message, response)
 
 	// Log to web interface
 	p.addLog(types.LogEntry{
