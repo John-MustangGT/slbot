@@ -278,7 +278,7 @@ func (p *Processor) processChat(message types.ChatMessage) {
 //			response = p.getFallbackResponse(context, cleanMessage)
 		}
 	} else {
-		response = p.getFallbackResponse(message, context, cleanMessage)
+		response = p.getFallbackResponse(context, cleanMessage)
 	}
 
 	// Truncate response if too long for SL chat
