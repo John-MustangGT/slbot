@@ -193,8 +193,9 @@ func (p *Processor) scanForNewAvatars() {
 
 // HandleNotification processes incoming notifications from Corrade
 func (p *Processor) HandleNotification(notification map[string]interface{}) {
+   log.Printf("DEBUG: %q", notification)
 	// Extract event type
-	eventType, ok := notification["Type"].(string)
+	eventType, ok := notification["type"].(string)
 	if !ok {
 		return
 	}
@@ -202,16 +203,20 @@ func (p *Processor) HandleNotification(notification map[string]interface{}) {
 	// Process LocalChat and InstantMessage events
 	if eventType == "local" || eventType == "message" {
 		// Extract message data
-		avatar, _ := notification["FirstName"].(string)
-		lastName, _ := notification["LastName"].(string)
-		if lastName != "" {
-			avatar += " " + lastName
-		}
-		message, _ := notification["Message"].(string)
+		avatar, _ := notification["name"].(string)
+		uuid, _ := notification["agent"].(string)
+		message, _ := notification["message"].(string)
+
+      if uuid == p.corradeClient.GetBotUUID() {
+         return
+      }
+
+      log.Printf("Debug-%s: %s", avatar, message)
 
 		if avatar != "" && message != "" {
 			chatMessage := types.ChatMessage{
 				Avatar:  avatar,
+            UUID:    uuid,
 				Message: message,
 				Type:    eventType,
 			}
@@ -226,13 +231,8 @@ func (p *Processor) processChat(message types.ChatMessage) {
 	// Update last interaction time
 	p.lastInteractionTime = time.Now()
 
-	// Skip if message is from the bot itself (avoid loops)
-	if strings.Contains(message.Type, "self") {
-		return
-	}
-
 	// Check if bot is mentioned or being directly addressed
-	if !strings.Contains(strings.ToLower(message.Message), strings.ToLower(p.config.Bot.Name)) &&
+	if !strings.Contains(strings.ToLower(message.Message), strings.ToLower(p.config.Bot.ChatName)) && message.Type != "message" &&
 		!strings.HasPrefix(message.Message, "/") {
 		return
 	}
@@ -275,10 +275,10 @@ func (p *Processor) processChat(message types.ChatMessage) {
 		if err != nil {
 			log.Printf("Error getting Llama response: %v", err)
 			// Fall back to predefined responses if Llama fails
-			response = p.getFallbackResponse(context, cleanMessage)
+//			response = p.getFallbackResponse(context, cleanMessage)
 		}
 	} else {
-		response = p.getFallbackResponse(context, cleanMessage)
+		response = p.getFallbackResponse(message, context, cleanMessage)
 	}
 
 	// Truncate response if too long for SL chat

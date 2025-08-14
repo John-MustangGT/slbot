@@ -91,6 +91,7 @@ func (m *Manager) StartRecording(name, recordedBy string) error {
 
 	m.recording = &types.MacroRecording{
 		Name:        name,
+      Region:      m.corradeClient.GetCurrentRegion(),
 		StartTime:   time.Now(),
 		Actions:     make([]types.MacroAction, 0),
 		RecordedBy:  recordedBy,
@@ -119,6 +120,7 @@ func (m *Manager) StopRecording(description string, tags []string, isIdleBehavio
 	macro := &types.Macro{
 		Name:         m.recording.Name,
 		Description:  description,
+      Region:       m.recording.Region,
 		Actions:      m.recording.Actions,
 		CreatedBy:    m.recording.RecordedBy,
 		CreatedAt:    m.recording.StartTime,
@@ -204,6 +206,12 @@ func (m *Manager) PlayMacro(name, requestedBy string) error {
 		m.mutex.Unlock()
 		return fmt.Errorf("macro '%s' not found", name)
 	}
+
+   thisRegion:=m.corradeClient.GetCurrentRegion()
+   if !strings.EqualFold(thisRegion, macro.Region) {
+		m.mutex.Unlock()
+		return fmt.Errorf("macro '%s' starts in region '%s' currently in '%s'", name, macro.Region, thisRegion)
+   }
 
 	m.isPlaying = true
 	m.mutex.Unlock()

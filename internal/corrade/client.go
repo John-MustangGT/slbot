@@ -204,10 +204,22 @@ func (c *Client) ProcessAvatarDataCallback(data map[string]interface{}) {
 	}
 }
 
-// Tell makes the bot speak using the tell command (replaces Say)
+// Tell makes the bot speak using the tell command in local/channel 0 (replaces Say)
 func (c *Client) Tell(message string) error {
 	params := map[string]string{
 		"message": message,
+		"entity":  "local",
+		"type":    "Normal",
+	}
+	_, err := c.sendCommand("tell", params)
+	return err
+}
+
+// Tell makes the bot speak using the tell command (replaces Say)
+func (c *Client) TellChannel(channel int, message string) error {
+	params := map[string]string{
+		"message": message,
+      "channel": fmt.Sprintf("%d", channel),
 		"entity":  "local",
 		"type":    "Normal",
 	}

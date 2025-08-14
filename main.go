@@ -55,6 +55,22 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
+   // Start goHome
+   go func() {
+      for {
+         cnt:=0
+         if corradeClient.IsOnline() {
+            for !corradeClient.HomeRegion(cfg.Bot.Home) {
+               log.Printf("Not Home")
+               corradeClient.GoHome()
+               time.Sleep(10 * time.Second)
+               cnt += 1
+            }
+         }
+         time.Sleep(60 * time.Second)
+      }
+   }()
+
 	// Start web interface (this will also start avatar tracking)
 	go func() {
 		if err := webInterface.Start(ctx); err != nil {

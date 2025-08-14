@@ -104,6 +104,7 @@ type MacroAction struct {
 type Macro struct {
 	Name         string        `json:"name"`
 	Description  string        `json:"description"`
+   Region       string        `json:"region"`
 	Actions      []MacroAction `json:"actions"`
 	CreatedBy    string        `json:"createdBy"`
 	CreatedAt    time.Time     `json:"createdAt"`
@@ -116,6 +117,7 @@ type Macro struct {
 // MacroRecording represents an active recording session
 type MacroRecording struct {
 	Name        string        `json:"name"`
+   Region      string        `json:"region"`
 	StartTime   time.Time     `json:"startTime"`
 	Actions     []MacroAction `json:"actions"`
 	RecordedBy  string        `json:"recordedBy"`

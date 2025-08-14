@@ -8,6 +8,7 @@ import (
    "regexp"
    "encoding/csv"
    "slbot/internal/types"
+   "slbot/internal/slfunc"
 )
 
 func (c *Client) ProcessGetAvatarPositionsCallback(data map[string]interface{}) {
@@ -46,7 +47,7 @@ func (c *Client) ProcessGetAvatarPositionsCallback(data map[string]interface{}) 
 
    for i:=0; i<len(parts); i+=3 {
       thisAvatar := &types.AvatarInfo{
-         Name:      normalizeName(parts[i]),
+         Name:      slfunc.NormalizeName(parts[i]),
          UUID:      parts[i+1],
          Position:  parsePositionString(strings.Trim(parts[i+2], "\"")),
          FirstSeen: currentTime,
@@ -55,7 +56,7 @@ func (c *Client) ProcessGetAvatarPositionsCallback(data map[string]interface{}) 
       }
 
       // Skip if this is the bot itself
-      if thisAvatar.UUID == c.botUUID || matchName(thisAvatar.Name, c.botName) {
+      if thisAvatar.UUID == c.botUUID || slfunc.MatchName(thisAvatar.Name, c.botName) {
          c.SetBotUUID(thisAvatar.UUID)
          c.status.Position = thisAvatar.Position
          c.status.LastUpdate = currentTime

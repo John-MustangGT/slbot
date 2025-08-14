@@ -11,6 +11,7 @@ type Config struct {
 	XMLName xml.Name      `xml:"config"`
 	Corrade CorradeConfig `xml:"corrade"`
 	Llama   LlamaConfig   `xml:"llama"`
+   SimScan SimScanConfig  `xml:"simscan"`
 	Bot     BotConfig     `xml:"bot"`
 	Prompts PromptsConfig `xml:"prompts"`
 }
@@ -29,9 +30,15 @@ type LlamaConfig struct {
 	Model   string `xml:"model"`
 }
 
+type SimScanConfig struct {
+	Enabled bool   `xml:"enabled"`
+	Storage    string `xml:"storage"`
+}
+
 // BotConfig holds bot-specific settings
 type BotConfig struct {
 	Name                    string   `xml:"name"`
+   ChatName                string   `xml:"chatname"`
 	UUID                    string   `xml:"uuid"`
 	MaxMessageLen           int      `xml:"maxMessageLen"`
 	PollInterval            int      `xml:"pollInterval"`
@@ -40,7 +47,9 @@ type BotConfig struct {
 	IdleTimeout             int      `xml:"idleTimeout"`             // Minutes before idle behavior
 	IdleBehaviorMinInterval int      `xml:"idleBehaviorMinInterval"` // Minimum minutes between idle behaviors
 	IdleBehaviorMaxInterval int      `xml:"idleBehaviorMaxInterval"` // Maximum minutes between idle behaviors
+   Home                    string   `xml:"home"`
 	Owners                  []string `xml:"owners>owner"`
+//   Regions                 []Location `xml:"regions"`
 }
 
 // PromptsConfig holds various prompts for different situations
