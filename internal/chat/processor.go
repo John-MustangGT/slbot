@@ -18,6 +18,7 @@ import (
 	"slbot/internal/corrade"
 	"slbot/internal/macros"
 	"slbot/internal/types"
+	"slbot/internal/slfunc"
 )
 
 // Processor handles chat processing and AI responses
@@ -203,15 +204,13 @@ func (p *Processor) HandleNotification(notification map[string]interface{}) {
 	// Process LocalChat and InstantMessage events
 	if eventType == "local" || eventType == "message" {
 		// Extract message data
-		avatar, _ := notification["name"].(string)
+		avatar := slfunc.GetAvatarName(notification)
 		uuid, _ := notification["agent"].(string)
 		message, _ := notification["message"].(string)
 
       if uuid == p.corradeClient.GetBotUUID() {
          return
       }
-
-      log.Printf("Debug-%s: %s", avatar, message)
 
 		if avatar != "" && message != "" {
 			chatMessage := types.ChatMessage{
@@ -297,7 +296,8 @@ func (p *Processor) processChat(message types.ChatMessage) {
    		log.Printf("Error sending response to SL: %v", err)
    	}
    } else {
-   	if err := p.corradeClient.Whisper(message.Avatar, response); err != nil {
+      log.Printf("DEBUG: %s", message.UUID)
+   	if err := p.corradeClient.Whisper(message.UUID, response); err != nil {
    		log.Printf("Error sending response to SL: %v", err)
    	}
    }
