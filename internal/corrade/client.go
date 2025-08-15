@@ -242,9 +242,8 @@ func (c *Client) Whisper(avatar, message string) error {
 // WalkTo moves the bot to specific coordinates
 func (c *Client) WalkTo(x, y, z float64) error {
 	params := map[string]string{
-		"x": fmt.Sprintf("%.2f", x),
-		"y": fmt.Sprintf("%.2f", y),
-		"z": fmt.Sprintf("%.2f", z),
+		"position": fmt.Sprintf("<%.2f,%.2f,%.2f>", x, y, z),
+      "action": "start",
 	}
 	_, err := c.sendCommand("walkto", params)
 	return err
@@ -267,6 +266,7 @@ func (c *Client) SitOn(objectName string) error {
 	params := map[string]string{
 		"item": objectName,
 	}
+   log.Printf("Sit Target: %s", objectName)
 	response, err := c.sendCommand("sit", params)
 	if err == nil && strings.Contains(response, "success") {
 		c.status.IsSitting = true
