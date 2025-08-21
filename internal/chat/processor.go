@@ -75,7 +75,7 @@ func (p *Processor) TestConnection() error {
 		return nil
 	}
 
-	_, err := p.getLlamaResponse("Hello, are you working?", "chat")
+	_, err := p.getLlamaResponse("", "Hello, are you working?", "chat")
 	if err != nil {
 		log.Printf("Llama connection failed, disabling AI chat: %v", err)
 		p.llamaEnabled = false
@@ -194,7 +194,7 @@ func (p *Processor) scanForNewAvatars() {
 
 // HandleNotification processes incoming notifications from Corrade
 func (p *Processor) HandleNotification(notification map[string]interface{}) {
-   log.Printf("DEBUG: %q", notification)
+//   log.Printf("DEBUG: %q", notification)
 	// Extract event type
 	eventType, ok := notification["type"].(string)
 	if !ok {
@@ -227,6 +227,10 @@ func (p *Processor) HandleNotification(notification map[string]interface{}) {
 
 // processChat processes incoming chat messages
 func (p *Processor) processChat(message types.ChatMessage) {
+   // start typing
+   defer p.corradeClient.Typing(false)
+   p.corradeClient.Typing(true)
+
 	// Update last interaction time
 	p.lastInteractionTime = time.Now()
 
@@ -275,7 +279,7 @@ func (p *Processor) processChat(message types.ChatMessage) {
 
 	// Get response from Llama if enabled, otherwise use fallbacks
 	if p.llamaEnabled {
-		response, err = p.getLlamaResponse(cleanMessage, context)
+		response, err = p.getLlamaResponse(message.Avatar, cleanMessage, context)
 		if err != nil {
 			log.Printf("Error getting Llama response: %v", err)
 			// Fall back to predefined responses if Llama fails
@@ -477,6 +481,7 @@ func (p *Processor) handleMovementCommands(message types.ChatMessage) bool {
 	}
 
 	// Sit commands
+   log.Printf("Pre-Sit Message '%s'", msg)
 	if strings.HasPrefix(msg, "sit on ") {
 		objectName := strings.TrimPrefix(msg, "sit on ")
 		objectName = strings.TrimSpace(objectName)
@@ -824,23 +829,23 @@ func (p *Processor) SetLlamaEnabled(enabled bool) {
 }
 
 // getLlamaResponse gets a response from the Llama API
-func (p *Processor) getLlamaResponse(prompt, context string) (string, error) {
+func (p *Processor) getLlamaResponse(avatar, prompt, context string) (string, error) {
 	// Use different prompts based on context
 	var finalPrompt string
 	switch context {
 	case "greeting":
-		finalPrompt = p.buildPrompt(p.config.Prompts.GreetingPrompt, prompt)
+		finalPrompt = p.buildPrompt(avatar, p.config.Prompts.GreetingPrompt, prompt)
 	case "help":
-		finalPrompt = p.buildPrompt(p.config.Prompts.HelpPrompt, prompt)
+		finalPrompt = p.buildPrompt(avatar, p.config.Prompts.HelpPrompt, prompt)
 	case "chat":
 		fallthrough
 	default:
-		finalPrompt = p.buildPrompt(p.config.Prompts.ChatPrompt, prompt)
+		finalPrompt = p.buildPrompt(avatar, p.config.Prompts.ChatPrompt, prompt)
 	}
 
 	req := types.LlamaRequest{
 		Model:  p.config.Llama.Model,
-		Prompt: p.config.Prompts.SystemPrompt + "\n\n" + finalPrompt,
+		Prompt: p.buildPrompt(avatar, p.config.Prompts.SystemPrompt, "") + "\n\n" + finalPrompt,
 		Stream: false,
 	}
 
@@ -869,8 +874,11 @@ func (p *Processor) getLlamaResponse(prompt, context string) (string, error) {
 }
 
 // buildPrompt builds a prompt with variable substitution
-func (p *Processor) buildPrompt(template, userMessage string) string {
+func (p *Processor) buildPrompt(avatar, template, userMessage string) string {
+   log.Printf("Avatar=%s", avatar)
 	prompt := strings.ReplaceAll(template, "{message}", userMessage)
+	prompt = strings.ReplaceAll(prompt, "{avatar}", avatar)
+	prompt = strings.ReplaceAll(prompt, "{chatname}", p.config.Bot.ChatName)
 	prompt = strings.ReplaceAll(prompt, "{botname}", p.config.Bot.Name)
 	prompt = strings.ReplaceAll(prompt, "{maxlen}", fmt.Sprintf("%d", p.config.Bot.MaxMessageLen))
 	return prompt

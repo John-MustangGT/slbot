@@ -215,6 +215,20 @@ func (c *Client) Tell(message string) error {
 	return err
 }
 
+// Tell makes the bot indicate typing
+func (c *Client) Typing(enable bool) error {
+	params := map[string]string{
+		"action":  "disable"
+	}
+   if enable {
+      params["action"] = "enable"
+   }
+	_, err := c.sendCommand("typing", params)
+	return err
+}
+
+
+
 // Tell makes the bot speak using the tell command (replaces Say)
 func (c *Client) TellChannel(channel int, message string) error {
 	params := map[string]string{
@@ -265,6 +279,8 @@ func (c *Client) Teleport(region string, x, y, z float64) error {
 func (c *Client) SitOn(objectName string) error {
 	params := map[string]string{
 		"item": objectName,
+      "range": "5",
+      "deanimate": "True",
 	}
    log.Printf("Sit Target: %s", objectName)
 	response, err := c.sendCommand("sit", params)
