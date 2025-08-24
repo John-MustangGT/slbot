@@ -218,7 +218,7 @@ func (c *Client) Tell(message string) error {
 // Tell makes the bot indicate typing
 func (c *Client) Typing(enable bool) error {
 	params := map[string]string{
-		"action":  "disable"
+		"action":  "disable",
 	}
    if enable {
       params["action"] = "enable"
